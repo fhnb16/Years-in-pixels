@@ -532,6 +532,7 @@ input {
     bottom: 20px;
     right: 20px;
     z-index: 999;
+    opacity: 0.64;
     padding: 10px 15px;
     border-radius: 50%;
     /* Make it round */
@@ -603,3 +604,74 @@ input {
 .settings__options input[type="radio"] {
     margin-right: 8px;
 }
+
+
+/* Styles for the checkboxes in the popup */
+
+.popup__section--checkboxes {
+    margin-top: 15px;
+}
+
+.popup__checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.popup__checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9em;
+    /* Adjust size if needed */
+    user-select: none;
+    /* Prevent text selection */
+    white-space: nowrap;
+}
+
+.popup__checkbox-label input[type="checkbox"] {
+    appearance: none;
+    /* Remove default checkbox styles */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    margin-right: 5px;
+    cursor: pointer;
+    outline: none;
+    position: relative;
+}
+
+.popup__checkbox-label input[type="checkbox"]:checked {
+    border-color: var(--color-button-hover-bg);
+    /* Green border when checked */
+}
+
+.popup__checkbox-label input[type="checkbox"]:checked::before {
+    content: "\2713";
+    /* Checkmark symbol */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    color: var(--color-button-bg);
+    /* Green checkmark when checked */
+}
+
+.popup__checkbox-label input[type="checkbox"]:disabled {
+    background-color: #eee;
+    cursor: default;
+}
+
+
+/*.popup__checkbox-label input[type="checkbox"]:disabled:checked::before {
+    color: #999;
+}*/
+
+
+/*.popup__checkbox-label input[type="checkbox"]:disabled {
+    border-color: #999;
+}*/

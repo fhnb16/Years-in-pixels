@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Год в пикселях</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?3">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 
@@ -44,6 +44,20 @@
                 <textarea class="popup__textarea" id="dayDescription" maxlength="300" placeholder="Опишите свой день (макс. 300 символов)"></textarea>
                 <div class="popup__char-counter" id="charCounter">0 / 300</div>
             </div>
+            <!-- New Checkboxes for Edit Popup -->
+            <div class="popup__section popup__section--checkboxes">
+                <span class="popup__section-title">Дополнительно</span>
+                <div class="popup__checkbox-group" id="editPopupCheckboxes">
+                    <label class="popup__checkbox-label"><input type="checkbox" name="alcohol" id="editAlcohol"> Алкоголь</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sport" id="editSport"> Спорт</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sex" id="editSex"> Секс</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="friends" id="editFriends"> Друзья</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="romantic" id="editRomantic"> Романтика</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="crying" id="editCrying"> Слёзы</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="WomanDay" id="editWomanDay"> Эти дни</label>
+                </div>
+            </div>
+
             <div class="popup__actions">
                 <button id="saveDayBtn">Сохранить</button>
                 <button type="button" id="cancelEditBtn">Отмена</button>
@@ -65,6 +79,19 @@
             <div class="popup__section">
                 <span class="popup__section-title">Описание:</span>
                 <p class="popup__view-description" id="viewPopupDescription"></p>
+            </div>
+            <!-- New Checkboxes for View Popup (read-only)-->
+            <div class="popup__section popup__section--checkboxes">
+                <span class="popup__section-title">Дополнительно</span>
+                <div class="popup__checkbox-group" id="viewPopupCheckboxes">
+                    <label class="popup__checkbox-label"><input type="checkbox" name="alcohol" id="viewAlcohol" disabled> Алкоголь</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sport" id="viewSport" disabled> Спорт</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sex" id="viewSex" disabled> Секс</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="friends" id="viewFriends" disabled> Друзья</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="romantic" id="viewRomantic" disabled> Романтика</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="crying" id="viewCrying" disabled> Слёзы</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="WomanDay" id="viewWomanDay" disabled> Эти дни</label>
+                </div>
             </div>
             <div class="popup__actions">
                 <button id="editDayBtn">Редактировать</button>
@@ -101,8 +128,10 @@
         </div>
     </div>
 
-
-    <script type="text/javascript" src="js/script.js?1"></script>
+    <script>
+        const API_URL = 'api/'; // Путь к PHP файлу api
+    </script>
+    <script type="text/javascript" src="js/script.js?3"></script>
 
 </body>
 

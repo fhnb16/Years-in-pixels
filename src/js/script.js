@@ -10,7 +10,6 @@ const MOOD_COLORS = {
     'tired': { label: 'Усталый день', color: '#9c88ff' },
     'sick': { label: 'Болезнь', color: '#ff793f' },
 };
-const API_URL = ''; // Путь к PHP файлу api
 
 // --- DOM Elements ---
 const calendarGrid = document.getElementById('calendarGrid');
@@ -41,6 +40,22 @@ const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const themeOptions = document.getElementById('themeOptions');
 const layoutOptions = document.getElementById('layoutOptions');
+
+const editAlcoholCheckbox = document.getElementById('editAlcohol');
+const editSportCheckbox = document.getElementById('editSport');
+const editSexCheckbox = document.getElementById('editSex');
+const editFriendsCheckbox = document.getElementById('editFriends');
+const editRomanticCheckbox = document.getElementById('editRomantic');
+const editCryingCheckbox = document.getElementById('editCrying');
+const editWomanDayCheckbox = document.getElementById('editWomanDay');
+const viewAlcoholCheckbox = document.getElementById('viewAlcohol');
+const viewSportCheckbox = document.getElementById('viewSport');
+const viewSexCheckbox = document.getElementById('viewSex');
+const viewFriendsCheckbox = document.getElementById('viewFriends');
+const viewRomanticCheckbox = document.getElementById('viewRomantic');
+const viewCryingCheckbox = document.getElementById('viewCrying');
+const viewWomanDayCheckbox = document.getElementById('viewWomanDay');
+
 const appBody = document.body;
 const appContainer = document.querySelector('.app');
 
@@ -110,7 +125,7 @@ const loadDataForYear = async(year, userId) => {
             const { year: entryYear, month, day } = parseDate(dateStr);
             if (!calendarData[entryYear]) calendarData[entryYear] = {};
             if (!calendarData[entryYear][month + 1]) calendarData[entryYear][month + 1] = {};
-            calendarData[entryYear][month + 1][day] = dayData;
+            calendarData[entryYear][month + 1][day] = dayData; // Store all data
         }
         // Обновляем список доступных лет
         availableYearsData = result.availableYears || [];
@@ -364,11 +379,26 @@ const renderCalendar = (year) => {
                 return;
             }
             const description = dayDescriptionInput.value.trim();
+            // Get the checkbox values
+            const alcohol = editAlcoholCheckbox.checked;
+            const sport = editSportCheckbox.checked;
+            const sex = editSexCheckbox.checked;
+            const friends = editFriendsCheckbox.checked;
+            const romantic = editRomanticCheckbox.checked;
+            const crying = editCryingCheckbox.checked;
+            const WomanDay = editWomanDayCheckbox.checked;
+            
             const entryData = {
                 date: selectedDate,
                 mood_key: selectedColorKey,
-                description: description
-                // user_id будет добавлен в saveEntry
+                description: description,
+                alcohol: alcohol,
+                sport: sport,
+                sex: sex,
+                friends: friends,
+                romantic: romantic,
+                crying: crying,
+                WomanDay: WomanDay,
             };
 
             const success = await saveEntry(entryData);
@@ -435,16 +465,34 @@ const renderCalendar = (year) => {
             editPopupHeader.textContent = `Запись за ${day} ${FULL_MONTHS[month]} ${year}`; // Используем полное название месяца
             dayDescriptionInput.value = '';
             selectedColorKey = null;
+            
+            editAlcoholCheckbox.checked = false;
+            editSportCheckbox.checked = false;
+            editSexCheckbox.checked = false;
+            editFriendsCheckbox.checked = false;
+            editRomanticCheckbox.checked = false;
+            editCryingCheckbox.checked = false;
+            editWomanDayCheckbox.checked = false;
+
             document.querySelectorAll('.popup__color-option--selected').forEach(el => el.classList.remove('popup__color-option--selected'));
             if (existingData) {
-                 selectedColorKey = existingData.color;
-                 dayDescriptionInput.value = existingData.description || '';
-                 const colorOption = popupColorsContainer.querySelector(`[data-color-key="${selectedColorKey}"]`);
-                 if (colorOption) colorOption.classList.add('popup__color-option--selected');
-            }
+                selectedColorKey = existingData.color;
+                dayDescriptionInput.value = existingData.description || '';
+                const colorOption = popupColorsContainer.querySelector(`[data-color-key="${selectedColorKey}"]`);
+                if (colorOption) colorOption.classList.add('popup__color-option--selected');
+   
+                // Set checkboxes based on existing data
+                editAlcoholCheckbox.checked = Boolean(Number(existingData.alcohol));
+                editSportCheckbox.checked = Boolean(Number(existingData.sport));
+                editSexCheckbox.checked = Boolean(Number(existingData.sex));
+                editFriendsCheckbox.checked = Boolean(Number(existingData.friends));
+                editRomanticCheckbox.checked = Boolean(Number(existingData.romantic));
+                editCryingCheckbox.checked = Boolean(Number(existingData.crying));
+                editWomanDayCheckbox.checked = Boolean(Number(existingData.WomanDay));
+           }
             handleDescriptionInput();
             editPopup.classList.add('popup--visible');
-            dayDescriptionInput.focus();
+            // dayDescriptionInput.focus();
         };
         const hideEditPopup = () => {
             editPopup.classList.remove('popup--visible');
@@ -463,6 +511,16 @@ const renderCalendar = (year) => {
                 viewPopupMood.textContent = 'N/A';
             }
             viewPopupDescription.textContent = dayData.description || '(Нет описания)';
+            
+            // Set checkbox values in View Popup
+            viewAlcoholCheckbox.checked = Boolean(Number(dayData.alcohol));
+            viewSportCheckbox.checked = Boolean(Number(dayData.sport));
+            viewSexCheckbox.checked = Boolean(Number(dayData.sex));
+            viewFriendsCheckbox.checked = Boolean(Number(dayData.friends));
+            viewRomanticCheckbox.checked = Boolean(Number(dayData.romantic));
+            viewCryingCheckbox.checked = Boolean(Number(dayData.crying));
+            viewWomanDayCheckbox.checked = Boolean(Number(dayData.WomanDay));
+
             editDayBtn.style.display = (year === ACTUAL_CURRENT_YEAR) ? 'inline-block' : 'none';
             viewPopup.classList.add('popup--visible');
         };

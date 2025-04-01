@@ -7,17 +7,24 @@
 Залей на хостинг, создай базу или выбери нужную и создай в ней таблицу:
  
 ```sql
-CREATE TABLE `calendar_entries` (
-  `id` INT UNSIGNED NOT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` BIGINT NOT NULL, -- Telegram User ID (может быть большим)
-  `entry_date` DATE NOT NULL,
-  `mood_key` VARCHAR(25) NOT NULL, -- Ключ настроения (e.g., 'good', 'sad')
-  `description` TEXT NULL, -- Описание дня (макс ~65k символов, NULL разрешен)
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY `user_day_unique` (`user_id`, `entry_date`), -- Гарантирует одну запись на пользователя в день
-  INDEX `idx_user_year` (`user_id`, `entry_date`) -- Индекс для быстрого поиска по пользователю и году/дате
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `calendar_entries` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) NOT NULL,
+  `entry_date` date NOT NULL,
+  `mood_key` varchar(25) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `alcohol` tinyint(1) DEFAULT 0,
+  `sport` tinyint(1) DEFAULT 0,
+  `sex` tinyint(1) DEFAULT 0,
+  `friends` tinyint(1) DEFAULT 0,
+  `romantic` tinyint(1) DEFAULT 0,
+  `crying` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_day_unique` (`user_id`,`entry_date`),
+  KEY `idx_user_year` (`user_id`,`entry_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ---

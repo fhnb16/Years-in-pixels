@@ -40,7 +40,7 @@ function getCalendarData($pdo) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT entry_date, mood_key, description FROM calendar_entries WHERE user_id = :user_id AND YEAR(entry_date) = :year ORDER BY entry_date ASC");
+        $stmt = $pdo->prepare("SELECT entry_date, mood_key, description, alcohol, sport, sex, friends, romantic, crying, WomanDay FROM calendar_entries WHERE user_id = :user_id AND YEAR(entry_date) = :year ORDER BY entry_date ASC");
         $stmt->execute(['user_id' => $userId, 'year' => $year]);
         $results = $stmt->fetchAll();
 
@@ -49,7 +49,14 @@ function getCalendarData($pdo) {
         foreach ($results as $row) {
             $formattedData[$row['entry_date']] = [
                 'color' => $row['mood_key'],
-                'description' => $row['description'] ?? '' // Гарантируем строку, если description NULL
+                'description' => $row['description'] ?? '',
+                'alcohol' => $row['alcohol'],
+                'sport' => $row['sport'],
+                'sex' => $row['sex'],
+                'friends' => $row['friends'],
+                'romantic' => $row['romantic'],
+                'crying' => $row['crying'],
+                'WomanDay' => $row['WomanDay'],
             ];
         }
 
@@ -89,6 +96,14 @@ function saveCalendarEntry($pdo) {
     $date = $input['date']; // Дополнительно можно валидировать формат YYYY-MM-DD
     $moodKey = trim($input['mood_key']);
     $description = isset($input['description']) ? trim($input['description']) : null; // Описание опционально
+    $alcohol = isset($input['alcohol']) ? (bool)$input['alcohol'] : false;
+    $sport = isset($input['sport']) ? (bool)$input['sport'] : false;
+    $sex = isset($input['sex']) ? (bool)$input['sex'] : false;
+    $friends = isset($input['friends']) ? (bool)$input['friends'] : false;
+    $romantic = isset($input['romantic']) ? (bool)$input['romantic'] : false;
+    $crying = isset($input['crying']) ? (bool)$input['crying'] : false;
+    $WomanDay = isset($input['WomanDay']) ? (bool)$input['WomanDay'] : false;
+
 
     // Простая валидация (добавьте более строгую при необходимости)
     if ($userId === false || $userId <= 0 || empty($moodKey) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -100,19 +115,34 @@ function saveCalendarEntry($pdo) {
 
     try {
         // Используем INSERT ... ON DUPLICATE KEY UPDATE для "upsert"
-        $sql = "INSERT INTO calendar_entries (user_id, entry_date, mood_key, description)
-                VALUES (:user_id, :entry_date, :mood_key, :description)
+        $sql = "INSERT INTO calendar_entries (user_id, entry_date, mood_key, description, alcohol, sport, sex, friends, romantic, crying, WomanDay)
+                VALUES (:user_id, :entry_date, :mood_key, :description, :alcohol, :sport, :sex, :friends, :romantic, :crying, :WomanDay)
                 ON DUPLICATE KEY UPDATE
-                   mood_key = VALUES(mood_key),
-                   description = VALUES(description)";
+                    mood_key = VALUES(mood_key),
+                    description = VALUES(description),
+                    alcohol = VALUES(alcohol),
+                    sport = VALUES(sport),
+                    sex = VALUES(sex),
+                    friends = VALUES(friends),
+                    romantic = VALUES(romantic),
+                    crying = VALUES(crying),
+                    WomanDay = VALUES(WomanDay)";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             'user_id' => $userId,
             'entry_date' => $date,
             'mood_key' => $moodKey,
-            'description' => $description
+            'description' => $description,
+            'alcohol' => $alcohol,
+            'sport' => $sport,
+            'sex' => $sex,
+            'friends' => $friends,
+            'romantic' => $romantic,
+            'crying' => $crying,
+            'WomanDay' => $WomanDay,
         ]);
+        
 
         if ($stmt->rowCount() > 0) {
              echo json_encode(['success' => true, 'message' => 'Запись успешно сохранена/обновлена']);
