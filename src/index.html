@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Год в пикселях</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body data-theme="light" class="app--layout-full">
+
+    <div class="app">
+        <header class="app__header">
+            <button class="header__nav-button" id="prevYearBtn" title="Предыдущий год">&lt;</button>
+            <h1 class="header__year" id="currentYearDisplay">2025</h1>
+            <button class="header__nav-button" id="nextYearBtn" title="Следующий год">&gt;</button>
+        </header>
+
+        <main class="app__calendar" id="calendarContainer">
+            <div class="calendar__days-axis" id="daysAxis">
+            </div>
+            <div class="calendar__main">
+                <div class="calendar__months" id="monthsHeader">
+                </div>
+                <div class="calendar__grid" id="calendarGrid">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="popup popup--edit" id="editPopup">
+        <div class="popup__content">
+            <button class="popup__close-button" aria-label="Закрыть" id="closeEditPopupBtn">&times;</button>
+            <h2 class="popup__header" id="editPopupHeader">Добавить запись</h2>
+            <div class="popup__section">
+                <span class="popup__section-title">Как прошел день?</span>
+                <div class="popup__colors" id="popupColors">
+                </div>
+            </div>
+            <div class="popup__section">
+                <label for="dayDescription" class="popup__description-label">Описание дня / Мысли:</label>
+                <textarea class="popup__textarea" id="dayDescription" maxlength="300" placeholder="Опишите свой день (макс. 300 символов)"></textarea>
+                <div class="popup__char-counter" id="charCounter">0 / 300</div>
+            </div>
+            <div class="popup__actions">
+                <button id="saveDayBtn">Сохранить</button>
+                <button type="button" id="cancelEditBtn">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="popup popup--view" id="viewPopup">
+        <div class="popup__content">
+            <button class="popup__close-button" aria-label="Закрыть" id="closeViewPopupBtn">&times;</button>
+            <h2 class="popup__header" id="viewPopupHeader">Просмотр дня</h2>
+            <div class="popup__section">
+                <span class="popup__section-title">Настроение:</span>
+                <div class="popup__view-info">
+                    <div class="popup__view-color" id="viewPopupColor"></div>
+                    <span class="popup__view-mood" id="viewPopupMood"></span>
+                </div>
+            </div>
+            <div class="popup__section">
+                <span class="popup__section-title">Описание:</span>
+                <p class="popup__view-description" id="viewPopupDescription"></p>
+            </div>
+            <div class="popup__actions">
+                <button id="editDayBtn">Редактировать</button>
+                <button type="button" id="cancelViewBtn">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <button class="settings-button" id="settingsButton" title="Настройки">⚙️</button>
+
+    <div class="settings" id="settingsPanel">
+        <button class="settings__close-button" aria-label="Закрыть настройки" id="closeSettingsBtn">&times;</button>
+        <h2 class="settings__title">Настройки</h2>
+
+        <div class="settings__group">
+            <h3 class="settings__subtitle">Тема оформления</h3>
+            <div class="settings__options" id="themeOptions">
+                <label><input type="radio" name="theme" value="light"> Светлая</label>
+                <label><input type="radio" name="theme" value="dark"> Темная</label>
+                <label><input type="radio" name="theme" value="pink"> Розовая</label>
+                <label><input type="radio" name="theme" value="neon"> Неоновая</label>
+                <label><input type="radio" name="theme" value="modern"> Современная</label>
+            </div>
+        </div>
+
+        <div class="settings__group">
+            <h3 class="settings__subtitle">Вид календаря</h3>
+            <div class="settings__options" id="layoutOptions">
+                <label><input type="radio" name="layout" value="full"> Полная ширина</label>
+                <label><input type="radio" name="layout" value="half"> Узкая (половина)</label>
+                <label><input type="radio" name="layout" value="compact"> Компактная</label>
+                <label><input type="radio" name="layout" value="fill"> Заполнить</label>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="text/javascript" src="js/script.js?1"></script>
+
+</body>
+
+</html>

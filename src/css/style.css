@@ -1,0 +1,605 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+/* --- Base Styles & Variables --- */
+
+:root {
+    --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    /* Default Theme: Light */
+    --color-bg: #ffffff;
+    --color-text: #333333;
+    --color-border: #e0e0e0;
+    --color-header-bg: #f8f8f8;
+    --color-day-bg: #f0f0f0;
+    --color-day-bg-hover: #e9e9e9;
+    --color-day-invalid-bg: #e0e0e0;
+    --color-day-invalid-text: #aaaaaa;
+    --color-popup-bg: rgba(255, 255, 255, 0.95);
+    --color-popup-shadow: rgba(0, 0, 0, 0.15);
+    --color-button-bg: #007bff;
+    --color-button-text: #ffffff;
+    --color-button-hover-bg: #0056b3;
+    --color-settings-bg: #fdfdfd;
+    --color-input-bg: #ffffff;
+    --color-input-border: #cccccc;
+    --font-main: 'Roboto', sans-serif;
+    /* Requires importing Inter font */
+}
+
+body[data-theme="dark"] {
+    --color-bg: #22272e;
+    --color-text: #cdd9e5;
+    --color-border: #444c56;
+    --color-header-bg: #2d333b;
+    --color-day-bg: #2d333b;
+    --color-day-bg-hover: #373e47;
+    --color-day-invalid-bg: #373e47;
+    --color-day-invalid-text: #768390;
+    --color-popup-bg: rgba(45, 51, 59, 0.95);
+    --color-popup-shadow: rgba(0, 0, 0, 0.3);
+    --color-button-bg: #347d39;
+    --color-button-text: #ffffff;
+    --color-button-hover-bg: #2ea043;
+    --color-settings-bg: #2d333b;
+    --color-input-bg: #22272e;
+    --color-input-border: #444c56;
+    --font-main: 'Roboto', sans-serif;
+    /* Requires importing Inter font */
+}
+
+body[data-theme="pink"] {
+    --color-bg: #fff0f5;
+    /* Lavender Blush */
+    --color-text: #5c3c4c;
+    /* Deep Pink/Brown */
+    --color-border: #ffc0cb;
+    /* Pink */
+    --color-header-bg: #ffe4e1;
+    /* Misty Rose */
+    --color-day-bg: #ffe4e1;
+    --color-day-bg-hover: #ffdde1;
+    --color-day-invalid-bg: #ffc0cb;
+    --color-day-invalid-text: #d8bfd8;
+    /* Thistle */
+    --color-popup-bg: rgba(255, 240, 245, 0.95);
+    --color-popup-shadow: rgba(219, 112, 147, 0.2);
+    /* Pale Violet Red shadow */
+    --color-button-bg: #ff69b4;
+    /* Hot Pink */
+    --color-button-text: #ffffff;
+    --color-button-hover-bg: #ff1493;
+    /* Deep Pink */
+    --color-settings-bg: #fff0f5;
+    --color-input-bg: #ffffff;
+    --color-input-border: #ffc0cb;
+    --font-main: 'Helvetica Neue', sans-serif;
+    /* Requires importing Inter font */
+}
+
+body[data-theme="neon"] {
+    --color-bg: #0d0d0d;
+    --color-text: #00ffcc;
+    /* Neon Aqua */
+    --color-border: #333333;
+    --color-header-bg: #1a1a1a;
+    --color-day-bg: #1a1a1a;
+    --color-day-bg-hover: #2a2a2a;
+    --color-day-invalid-bg: #252525;
+    --color-day-invalid-text: #555555;
+    --color-popup-bg: rgba(13, 13, 13, 0.9);
+    --color-popup-shadow: rgba(0, 255, 204, 0.3);
+    --color-button-bg: #ff00ff;
+    /* Neon Magenta */
+    --color-button-text: #0d0d0d;
+    --color-button-hover-bg: #cc00cc;
+    --color-settings-bg: #1a1a1a;
+    --color-input-bg: #1f1f1f;
+    --color-input-border: #ff00ff;
+    --color-text: #00ffcc;
+    /* Override general text */
+    --color-day-text: #00ffcc;
+    /* Ensure grid numbers are neon */
+    --font-main: 'Ubuntu', sans-serif;
+    /* Requires importing Inter font */
+}
+
+body[data-theme="modern"] {
+    --color-bg: #f4f7f6;
+    /* Very light grey/off-white */
+    --color-text: #333333;
+    /* Dark grey */
+    --color-border: #dcdcdc;
+    /* Gainsboro */
+    --color-header-bg: #ffffff;
+    --color-day-bg: #ffffff;
+    --color-day-bg-hover: #f0f0f0;
+    --color-day-invalid-bg: #e8e8e8;
+    --color-day-invalid-text: #b0b0b0;
+    --color-popup-bg: rgba(255, 255, 255, 0.98);
+    --color-popup-shadow: rgba(0, 0, 0, 0.1);
+    --color-button-bg: #4a90e2;
+    /* Soft Blue */
+    --color-button-text: #ffffff;
+    --color-button-hover-bg: #357abd;
+    --color-settings-bg: #ffffff;
+    --color-input-bg: #ffffff;
+    --color-input-border: #cccccc;
+    --font-main: 'Inter', sans-serif;
+    /* Requires importing Inter font */
+}
+
+
+/* --- General --- */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+/* For modern theme */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-main);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    transition: background-color 0.3s, color 0.3s;
+    padding-bottom: 80px;
+    /* Space for potential fixed settings button */
+}
+
+button {
+    font-family: inherit;
+    cursor: pointer;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--color-button-bg);
+    color: var(--color-button-text);
+    transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+    background-color: var(--color-button-hover-bg);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+textarea,
+input {
+    font-family: inherit;
+    padding: 8px;
+    border: 1px solid var(--color-input-border);
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-radius: 4px;
+}
+
+
+/* --- App Container --- */
+
+.app {
+    max-width: 1200px;
+    /*margin: 20px auto;
+    padding: 15px;*/
+}
+
+
+/* --- Header --- */
+
+.app__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    margin-bottom: 15px;
+    background-color: var(--color-header-bg);
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 10px 15px;
+}
+
+.header__year {
+    font-size: 1.8em;
+    font-weight: bold;
+}
+
+.header__nav-button {
+    font-size: 1.2em;
+    padding: 5px 10px;
+}
+
+
+/* --- Calendar --- */
+
+.app__calendar {
+    display: flex;
+    width: 100%;
+    /* Default full width */
+    overflow-x: auto;
+    /* Allow scrolling on smaller screens */
+    transition: width 0.3s, max-height 0.3s;
+    /* For layout changes */
+}
+
+
+/* Layout Modifiers */
+
+.app--layout-full .app__calendar {
+    width: 100%;
+    max-height: none;
+}
+
+.app--layout-half .app__calendar {
+    width: 50%;
+    margin-left: auto;
+    margin-right: auto;
+    max-height: none;
+}
+
+.app--layout-compact .app__calendar {
+    max-height: 500px;
+    width: auto;
+    max-width: 100%;
+    overflow-y: auto;
+    /* Ensure vertical scroll if needed */
+}
+
+.app--layout-compact {
+    /* Adjust main app container for compact */
+    max-width: 650px;
+    /* Example max-width */
+    margin: 0 auto;
+}
+
+.app--layout-half {
+    max-width: 90%;
+    /* Allow half layout to still be reasonably wide */
+}
+
+.app--layout-fill {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+.app--layout-fill .calendar__day {
+    height: calc(100vh / 45);
+}
+
+.app--layout-fill .calendar__day-number {
+    height: calc(100vh / 45);
+}
+
+.app--layout-fill .calendar__grid {
+    grid-template-rows: repeat(31, calc(100vh / 45));
+}
+
+.calendar__days-axis {
+    display: flex;
+    flex-direction: column;
+    padding-right: 10px;
+    padding-left: 10px;
+    padding-top: 72px;
+    /* Align with grid below month names */
+    font-size: 0.8em;
+    color: var(--color-text);
+}
+
+.calendar__day-number {
+    height: var(--day-size, 25px);
+    /* Match day cell height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+    /* Match grid gap */
+}
+
+.calendar__main {
+    flex-grow: 1;
+}
+
+.calendar__months {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    text-align: center;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 20px;
+    margin-top: 20px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.calendar__month {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 5px 0;
+    rotate: -45deg;
+}
+
+.calendar__grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: repeat(31, var(--day-size, 25px));
+    gap: 2px;
+    padding: 0 10px;
+    /* Padding to prevent cells touching edges */
+    /*min-width: 400px;*/
+    /* Ensure grid has a minimum width */
+}
+
+.calendar__day {
+    background-color: var(--color-day-bg);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    border-radius: 2px;
+    min-width: 20px;
+    /* Ensure minimum width for cells */
+    aspect-ratio: 1 / 1;
+    /* Make cells squareish */
+    height: var(--day-size, 25px);
+    /* Control height */
+    width: 100%;
+    /* Take full column width */
+    position: relative;
+    /* For potential future absolute elements inside */
+}
+
+.calendar__day:hover:not(.calendar__day--invalid) {
+    background-color: var(--color-day-bg-hover);
+    border-color: var(--color-text);
+}
+
+.calendar__day--invalid {
+    background-color: var(--color-day-invalid-bg);
+    border-color: transparent;
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.calendar__day--filled {
+    /* Background color set by JS */
+}
+
+
+/* --- Popup --- */
+
+.popup {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    /* Dim overlay */
+    display: none;
+    /* Hidden by default */
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    z-index: 1000;
+}
+
+.popup--visible {
+    display: flex;
+}
+
+.popup__content {
+    background-color: var(--color-popup-bg);
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px var(--color-popup-shadow);
+    max-width: 450px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.popup__close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    line-height: 1;
+    color: var(--color-text);
+    cursor: pointer;
+    padding: 5px;
+}
+
+.popup__close-button:hover {
+    color: red;
+}
+
+.popup__header {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 10px;
+}
+
+.popup__section {
+    margin-bottom: 20px;
+}
+
+.popup__section-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.popup__colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.popup__color-option {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.popup__color-option:hover {
+    transform: scale(1.1);
+}
+
+.popup__color-option--selected {
+    border-color: var(--color-text);
+    box-shadow: 0 0 5px var(--color-text);
+}
+
+.popup__description-label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.popup__textarea {
+    width: 100%;
+    min-height: 100px;
+    resize: vertical;
+    margin-bottom: 5px;
+}
+
+.popup__char-counter {
+    font-size: 0.8em;
+    text-align: right;
+    color: #888;
+}
+
+.popup__view-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.popup__view-color {
+    width: 25px;
+    height: 25px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+}
+
+.popup__view-mood {
+    font-style: italic;
+}
+
+.popup__view-description {
+    background-color: rgba(128, 128, 128, 0.1);
+    /* Slight background */
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    min-height: 60px;
+    white-space: pre-wrap;
+    /* Preserve line breaks */
+    word-wrap: break-word;
+}
+
+.popup__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+
+/* --- Settings --- */
+
+.settings-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 999;
+    padding: 10px 15px;
+    border-radius: 50%;
+    /* Make it round */
+    font-size: 1.2em;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.settings {
+    position: fixed;
+    top: 0;
+    right: -300px;
+    /* Start off-screen */
+    width: 280px;
+    height: 100%;
+    background-color: var(--color-settings-bg);
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    z-index: 1001;
+    /* Above popup overlay */
+    transition: right 0.3s ease-in-out;
+    overflow-y: auto;
+    border-left: 1px solid var(--color-border);
+}
+
+.settings--visible {
+    right: 0;
+}
+
+.settings__close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    line-height: 1;
+    color: var(--color-text);
+    cursor: pointer;
+    padding: 5px;
+}
+
+.settings__close-button:hover {
+    color: red;
+}
+
+.settings__group {
+    margin-bottom: 25px;
+}
+
+.settings__title {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 5px;
+}
+
+.settings__options label {
+    display: block;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+.settings__options input[type="radio"] {
+    margin-right: 8px;
+}
