@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS `calendar_entries` (
   `friends` tinyint(1) DEFAULT 0,
   `romantic` tinyint(1) DEFAULT 0,
   `crying` tinyint(1) DEFAULT 0,
+  `WomanDay` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `user_day_unique` (`user_id`,`entry_date`),
   KEY `idx_user_year` (`user_id`,`entry_date`)
