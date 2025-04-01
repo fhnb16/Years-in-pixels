@@ -1,4 +1,10 @@
 # Years-in-pixels
+
+Рабочий пример: https://t.me/PixelYearsBot/myYear
+
+---
+
+Залей на хостинг, создай базу или выбери нужную и создай в ней таблицу:
  
 ```sql
 CREATE TABLE `calendar_entries` (
