@@ -10,6 +10,15 @@ const MOOD_COLORS = {
     'tired': { label: 'Усталый день', color: '#9c88ff' },
     'sick': { label: 'Болезнь', color: '#ff793f' },
 };
+const MOOD_ACTIVITY = {
+    'alcohol': { emoji: '🍷' },
+    'sport': { emoji: '💪🏻' },
+    'sex': { emoji: '🍓' },
+    'friends': { emoji: '🤟🏻' },
+    'romantic': { emoji: '💕' },
+    'crying': { emoji: '😭' },
+    'WomanDay': { emoji: '🩸' },
+};
 
 // --- DOM Elements ---
 const calendarGrid = document.getElementById('calendarGrid');
@@ -55,6 +64,8 @@ const viewFriendsCheckbox = document.getElementById('viewFriends');
 const viewRomanticCheckbox = document.getElementById('viewRomantic');
 const viewCryingCheckbox = document.getElementById('viewCrying');
 const viewWomanDayCheckbox = document.getElementById('viewWomanDay');
+
+const legendContainer = document.getElementById('legend');
 
 const appBody = document.body;
 const appContainer = document.querySelector('.app');
@@ -187,7 +198,7 @@ const saveEntry = async(entryData) => {
 
 // --- Settings (localStorage) ---
 const loadSettings = () => {
-    const savedTheme = localStorage.getItem('calendarTheme') || 'light';
+    const savedTheme = localStorage.getItem('calendarTheme') || 'telegram';
     const savedLayout = localStorage.getItem('calendarLayout') || 'fill';
     applyTheme(savedTheme);
     applyLayout(savedLayout);
@@ -199,8 +210,37 @@ const loadSettings = () => {
 const saveTheme = (theme) => localStorage.setItem('calendarTheme', theme);
 const saveLayout = (layout) => localStorage.setItem('calendarLayout', layout);
 const applyTheme = (themeName) => {
+
+    if (themeName === 'telegram') {
+        if (window.Telegram && Telegram.WebApp) {
+            const theme = Telegram.WebApp.themeParams;
+            document.documentElement.style.setProperty("--color-bg", theme.bg_color);
+            document.documentElement.style.setProperty("--color-text", theme.text_color);
+            document.documentElement.style.setProperty("--color-hint", theme.hint_color);
+            document.documentElement.style.setProperty("--color-link", theme.link_color);
+            document.documentElement.style.setProperty("--color-button-bg", theme.button_color);
+            document.documentElement.style.setProperty("--color-button-text", theme.button_text_color);
+            document.documentElement.style.setProperty("--color-secondary-bg", theme.secondary_bg_color);
+            document.documentElement.style.setProperty("--color-header-bg", theme.secondary_bg_color);
+            document.documentElement.style.setProperty("--color-bottom-bar-bg", theme.bottom_bar_bg_color);
+            document.documentElement.style.setProperty("--color-accent-text", theme.accent_text_color);
+            document.documentElement.style.setProperty("--color-section-bg", theme.section_bg_color);
+            document.documentElement.style.setProperty("--color-section-header-text", theme.section_header_text_color);
+            document.documentElement.style.setProperty("--color-section-separator", theme.section_separator_color);
+            document.documentElement.style.setProperty("--color-subtitle-text", theme.subtitle_text_color);
+            document.documentElement.style.setProperty("--color-settings-bg", theme.secondary_bg_color);
+            document.documentElement.style.setProperty("--color-popup-bg", theme.bg_color);
+            document.documentElement.style.setProperty("--color-day-bg", theme.secondary_bg_color);
+            document.documentElement.style.setProperty("--color-border", theme.hint_color);
+            document.documentElement.style.setProperty("--color-input-bg", theme.header_bg_color);
+            document.documentElement.style.setProperty("--color-day-invalid-bg", theme.subtitle_text_color);
+
+
+        }
+    }
     appBody.dataset.theme = themeName;
     saveTheme(themeName);
+
 };
 const applyLayout = (layoutName) => {
     appBody.classList.remove('app--layout-full', 'app--layout-half', 'app--layout-compact', 'app--layout-fill');
@@ -257,7 +297,21 @@ const renderCalendar = (year) => {
                         const moodInfo = MOOD_COLORS[dayData.color];
                         if (moodInfo) {
                             dayCell.style.backgroundColor = moodInfo.color;
-                            dayCell.title = `${moodInfo.label}${dayData.description ? ` - ${dayData.description.substring(0, 50)}...` : ''}`;
+                            //dayCell.title = `${moodInfo.label}${dayData.description ? ` - ${dayData.description.substring(0, 50)}...` : ''}`;
+                            let titleText = `${moodInfo.label}${dayData.description ? ` - ${dayData.description.substring(0, 50)}...` : ''}`;
+                            const activityEmojis = [];
+                            if (Boolean(Number(dayData.alcohol))) activityEmojis.push(MOOD_ACTIVITY.alcohol.emoji);
+                            if (Boolean(Number(dayData.sport))) activityEmojis.push(MOOD_ACTIVITY.sport.emoji);
+                            if (Boolean(Number(dayData.sex))) activityEmojis.push(MOOD_ACTIVITY.sex.emoji);
+                            if (Boolean(Number(dayData.friends))) activityEmojis.push(MOOD_ACTIVITY.friends.emoji);
+                            if (Boolean(Number(dayData.romantic))) activityEmojis.push(MOOD_ACTIVITY.romantic.emoji);
+                            if (Boolean(Number(dayData.crying))) activityEmojis.push(MOOD_ACTIVITY.crying.emoji);
+                            if (Boolean(Number(dayData.WomanDay))) activityEmojis.push(MOOD_ACTIVITY.WomanDay.emoji);
+
+                            if (activityEmojis.length > 0) {
+                                titleText += ` ${activityEmojis.join('')}`;
+                            }
+                            dayCell.title = titleText;
                                 dayCell.classList.add('calendar__day--filled');
                             } else {
                                 console.warn(`Неизвестный mood_key '${dayData.color}' для даты ${dateStr}`);
@@ -300,7 +354,32 @@ const renderCalendar = (year) => {
              nextYearBtn.disabled = isLoading || currentYear >= ACTUAL_CURRENT_YEAR;
         };
 
-        function showToast(message, duration = 3000) {
+        const renderLegend = () => {
+            legendContainer.innerHTML = ''; // Очищаем контейнер перед заполнением
+            const legendList = document.createElement('ul'); // Создаем список для элементов легенды
+            legendList.classList.add('colorsLegend__list');
+
+            Object.entries(MOOD_COLORS).forEach(([key, { label, color }]) => {
+                const legendItem = document.createElement('li');
+                legendItem.classList.add('colorsLegend__item');
+
+                const colorBox = document.createElement('span');
+                colorBox.classList.add('colorsLegend__color');
+                colorBox.style.backgroundColor = color;
+
+                const colorLabel = document.createElement('span');
+                colorLabel.classList.add('colorsLegend__label');
+                colorLabel.textContent = label;
+
+                legendItem.appendChild(colorBox);
+                legendItem.appendChild(colorLabel);
+                legendList.appendChild(legendItem);
+            });
+
+            legendContainer.appendChild(legendList);
+        };
+
+        function showToast(message, duration = 2500) {
             // Создаем элемент div для уведомления
             const toast = document.createElement('div');
             toast.textContent = message;
@@ -352,6 +431,8 @@ const renderCalendar = (year) => {
             // Ищем данные в локальном кеше calendarData
             const dayData = calendarData[year]?.[month + 1]?.[day];
 
+            tg.HapticFeedback.selectionChanged();
+
             if (dayData) {
                  showViewPopup(selectedDate, dayData);
             } else if (isCurrentActualYear) { // Редактировать можно только пустые дни текущего года
@@ -366,6 +447,7 @@ const renderCalendar = (year) => {
              selectedOption.classList.add('popup__color-option--selected');
              //popupColorsDescr.textContent = MOOD_COLORS[selectedColorKey].label;
              showToast(MOOD_COLORS[selectedColorKey].label);
+             tg.HapticFeedback.selectionChanged();
         };
 
         const handleDescriptionInput = () => {
@@ -405,10 +487,12 @@ const renderCalendar = (year) => {
 
             if (success) {
                 hideEditPopup();
+                tg.HapticFeedback.notificationOccurred('success');
                 // Обновляем данные для текущего года после сохранения
                 await loadDataForYear(currentYear, currentUserId);
                 renderCalendar(currentYear); // Перерисовываем календарь с новыми данными
             } else {
+                tg.HapticFeedback.notificationOccurred('warning');
                 // Ошибка уже показана в saveEntry
             }
         };
@@ -420,6 +504,7 @@ const renderCalendar = (year) => {
              if (year === ACTUAL_CURRENT_YEAR) { // Доп. проверка, что редактируем текущий год
                 hideViewPopup();
                 showEditPopup(selectedDate, dayData); // Передаем данные для предзаполнения
+                tg.HapticFeedback.impactOccurred("soft");
              } else {
                 tg.showAlert("Редактировать можно только записи текущего года.");
              }
@@ -433,6 +518,7 @@ const renderCalendar = (year) => {
                 const success = await loadDataForYear(currentYear, currentUserId);
                 if (success) {
                     renderCalendar(currentYear);
+                    tg.HapticFeedback.impactOccurred("soft");
                 } else {
                     // Ошибка загрузки обработана в loadDataForYear, откатываем год назад
                     currentYear++;
@@ -447,6 +533,7 @@ const renderCalendar = (year) => {
                  const success = await loadDataForYear(currentYear, currentUserId);
                  if (success) {
                     renderCalendar(currentYear);
+                    tg.HapticFeedback.selectionChanged();
                  } else {
                     // Ошибка загрузки обработана в loadDataForYear, откатываем год назад
                      currentYear--;
@@ -456,8 +543,8 @@ const renderCalendar = (year) => {
 
         // --- Handlers for Settings, Popups ---
          const handleSettingsToggle = () => settingsPanel.classList.toggle('settings--visible');
-         const handleThemeChange = (event) => { if (event.target.type === 'radio') applyTheme(event.target.value); };
-         const handleLayoutChange = (event) => { if (event.target.type === 'radio') applyLayout(event.target.value); };
+         const handleThemeChange = (event) => { if (event.target.type === 'radio') applyTheme(event.target.value); tg.HapticFeedback.impactOccurred("medium"); };
+         const handleLayoutChange = (event) => { if (event.target.type === 'radio') applyLayout(event.target.value); tg.HapticFeedback.impactOccurred("medium"); };
 
         const showEditPopup = (dateStr, existingData = null) => {
             selectedDate = dateStr;
@@ -526,12 +613,14 @@ const renderCalendar = (year) => {
         };
         const hideViewPopup = () => viewPopup.classList.remove('popup--visible');
 
-
         // --- Initialization ---
         const init = async () => {
              tg.ready(); // Сообщаем Telegram, что WebApp готово
 
              const userData = tg.initDataUnsafe?.user;
+
+             tg.SettingsButton.show();
+             tg.onEvent('settingsButtonClicked', handleSettingsToggle)
 
              if (!userData) {
                  console.error("Не удалось получить данные пользователя из Telegram.");
@@ -546,6 +635,7 @@ const renderCalendar = (year) => {
 
              loadSettings(); // Загружаем настройки UI
              renderColorOptions(); // Рендерим кнопки выбора цвета
+             renderLegend();
 
              // Загружаем данные для текущего года
              const initialLoadSuccess = await loadDataForYear(currentYear, currentUserId);

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Год в пикселях</title>
-    <link rel="stylesheet" href="css/style.css?3">
+    <link rel="stylesheet" href="css/style.css?7">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 
@@ -48,13 +48,13 @@
             <div class="popup__section popup__section--checkboxes">
                 <span class="popup__section-title">Дополнительно</span>
                 <div class="popup__checkbox-group" id="editPopupCheckboxes">
-                    <label class="popup__checkbox-label"><input type="checkbox" name="alcohol" id="editAlcohol"> Алкоголь</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="sport" id="editSport"> Спорт</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="sex" id="editSex"> Секс</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="friends" id="editFriends"> Друзья</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="romantic" id="editRomantic"> Романтика</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="crying" id="editCrying"> Слёзы</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="WomanDay" id="editWomanDay"> Эти дни</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="alcohol" id="editAlcohol"> Алкоголь 🍷</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sport" id="editSport"> Спорт 💪🏻</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sex" id="editSex"> Секс 🍓</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="friends" id="editFriends"> Друзья 🤟🏻</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="romantic" id="editRomantic"> Романтика 💕</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="crying" id="editCrying"> Слёзы 😭</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="WomanDay" id="editWomanDay"> Эти дни 🩸</label>
                 </div>
             </div>
 
@@ -84,13 +84,13 @@
             <div class="popup__section popup__section--checkboxes">
                 <span class="popup__section-title">Дополнительно</span>
                 <div class="popup__checkbox-group" id="viewPopupCheckboxes">
-                    <label class="popup__checkbox-label"><input type="checkbox" name="alcohol" id="viewAlcohol" disabled> Алкоголь</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="sport" id="viewSport" disabled> Спорт</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="sex" id="viewSex" disabled> Секс</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="friends" id="viewFriends" disabled> Друзья</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="romantic" id="viewRomantic" disabled> Романтика</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="crying" id="viewCrying" disabled> Слёзы</label>
-                    <label class="popup__checkbox-label"><input type="checkbox" name="WomanDay" id="viewWomanDay" disabled> Эти дни</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="alcohol" id="viewAlcohol" disabled> Алкоголь 🍷</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sport" id="viewSport" disabled> Спорт 💪🏻</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="sex" id="viewSex" disabled> Секс 🍓</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="friends" id="viewFriends" disabled> Друзья 🤟🏻</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="romantic" id="viewRomantic" disabled> Романтика 💕</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="crying" id="viewCrying" disabled> Слёзы 😭</label>
+                    <label class="popup__checkbox-label"><input type="checkbox" name="WomanDay" id="viewWomanDay" disabled> Эти дни 🩸</label>
                 </div>
             </div>
             <div class="popup__actions">
@@ -100,7 +100,9 @@
         </div>
     </div>
 
-    <button class="settings-button" id="settingsButton" title="Настройки">⚙️</button>
+    <div id="legend" class="colorsLegend"></div>
+
+    <button class="settings-button" id="settingsButton" title="Настройки">Настройки ⚙️</button>
 
     <div class="settings" id="settingsPanel">
         <button class="settings__close-button" aria-label="Закрыть настройки" id="closeSettingsBtn">&times;</button>
@@ -109,11 +111,22 @@
         <div class="settings__group">
             <h3 class="settings__subtitle">Тема оформления</h3>
             <div class="settings__options" id="themeOptions">
+                <label><input type="radio" name="theme" value="telegram"> Telegram</label>
                 <label><input type="radio" name="theme" value="light"> Светлая</label>
                 <label><input type="radio" name="theme" value="dark"> Темная</label>
                 <label><input type="radio" name="theme" value="pink"> Розовая</label>
                 <label><input type="radio" name="theme" value="neon"> Неоновая</label>
                 <label><input type="radio" name="theme" value="modern"> Современная</label>
+                <label><input type="radio" name="theme" value="vk"> VK</label>
+                <label><input type="radio" name="theme" value="twitch"> Twitch</label>
+                <label><input type="radio" name="theme" value="youtube"> YouTube</label>
+                <label><input type="radio" name="theme" value="discord"> Discord</label>
+                <label><input type="radio" name="theme" value="spotify"> Spotify</label>
+                <label><input type="radio" name="theme" value="steam"> Steam</label>
+                <label><input type="radio" name="theme" value="tiktok"> TikTok</label>
+                <label><input type="radio" name="theme" value="yandex"> Яндекс</label>
+                <label><input type="radio" name="theme" value="reddit"> Reddit</label>
+                <label><input type="radio" name="theme" value="pornhub"> PornHub</label>
             </div>
         </div>
 
@@ -126,12 +139,16 @@
                 <label><input type="radio" name="layout" value="fill"> Заполнить</label>
             </div>
         </div>
+
+        <div class="settings__group">
+            <? include_once('metrics.html'); ?>
+        </div>
     </div>
 
     <script>
         const API_URL = 'api/'; // Путь к PHP файлу api
     </script>
-    <script type="text/javascript" src="js/script.js?3"></script>
+    <script type="text/javascript" src="js/script.js?7"></script>
 
 </body>
 
