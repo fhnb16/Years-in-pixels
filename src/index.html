@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Год в пикселях</title>
-    <link rel="stylesheet" href="css/style.css?7">
+    <link rel="stylesheet" href="css/style.css?8">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 
@@ -127,6 +127,8 @@
                 <label><input type="radio" name="theme" value="yandex"> Яндекс</label>
                 <label><input type="radio" name="theme" value="reddit"> Reddit</label>
                 <label><input type="radio" name="theme" value="pornhub"> PornHub</label>
+                <label><input type="radio" name="theme" value="halflife"> Half-Life</label>
+                <label><input type="radio" name="theme" value="cyberpunk"> Cyberpunk</label>
             </div>
         </div>
 
@@ -141,14 +143,26 @@
         </div>
 
         <div class="settings__group">
+            <h3 class="settings__subtitle">Прочее</h3>
+            <center><a href="https://t.me/stickers_feedback_bot" class="settings-button">Обратная связь</a></center>
             <? include_once('metrics.html'); ?>
         </div>
+
+        <? if(file_exists('api/test.php')){ ?>
+            <div class="settings__group">
+                <h3 class="settings__subtitle">Тестирование</h3>
+                <div class="settings__options" id="backendOptions">
+                    <label><input type="radio" name="backend" value="stable"> Стабильный backend</label>
+                    <label><input type="radio" name="backend" value="test"> Тестовый backend</label>
+                </div>
+            </div>
+            <? } ?>
     </div>
 
     <script>
-        const API_URL = 'api/'; // Путь к PHP файлу api
+        let API_URL = 'api/'; // Путь к PHP файлу api
     </script>
-    <script type="text/javascript" src="js/script.js?7"></script>
+    <script type="text/javascript" src="js/script.js?8"></script>
 
 </body>
 

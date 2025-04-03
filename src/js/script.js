@@ -49,6 +49,7 @@ const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const themeOptions = document.getElementById('themeOptions');
 const layoutOptions = document.getElementById('layoutOptions');
+const backendOptions = document.getElementById('backendOptions');
 
 const editAlcoholCheckbox = document.getElementById('editAlcohol');
 const editSportCheckbox = document.getElementById('editSport');
@@ -82,6 +83,7 @@ let isLoading = false; // Флаг для индикации загрузки
 
 // --- Telegram WebApp ---
 const tg = window.Telegram.WebApp;
+let initData = null; // Переменная для хранения initData
 
 // --- Utility Functions (остаются те же) ---
 const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -106,21 +108,37 @@ const showLoading = (show) => {
 };
 
 // --- Data Handling (API) ---
-const loadDataForYear = async(year, userId) => {
+const loadDataForYear = async(year, userId, initData) => {
     if (!userId) {
         console.error("User ID не определен. Невозможно загрузить данные.");
         alert("Не удалось определить пользователя Telegram. Попробуйте перезапустить приложение.");
         showLoading(false);
         return false; // Возвращаем false при ошибке
     }
+
+    if (!initData) {
+        console.error("initData не определен. Невозможно загрузить данные.");
+        alert("Не удалось определить initData. Попробуйте перезапустить приложение.");
+        showLoading(false);
+        return false;
+    }
+
     showLoading(true);
     try {
+        let encodedInitData = encodeURIComponent(initData);
+        console.log("InitData: ", initData);
+        console.log("encodedInitData: ", encodedInitData);
+        console.log("decodedInitData: ", decodeURIComponent(encodedInitData));
         const response = await fetch(`${API_URL}?year=${year}&user_id=${userId}`, {
             method: 'GET',
-            headers: { 'Accept': 'application/json' }
+            headers: {
+                'Accept': 'application/json',
+                'Authorization': initData, // Передаем initData в headers
+            }
         });
 
         if (!response.ok) {
+            console.log('result', response);
             throw new Error(`Ошибка сети или сервера: ${response.statusText} (статус ${response.status})`);
         }
 
@@ -155,12 +173,20 @@ const loadDataForYear = async(year, userId) => {
     }
 };
 
-const saveEntry = async(entryData) => {
+const saveEntry = async(entryData, initData) => {
     if (!currentUserId) {
         console.error("User ID не определен. Невозможно сохранить данные.");
         alert("Не удалось определить пользователя Telegram. Попробуйте перезапустить приложение.");
         return false;
     }
+
+    if (!initData) {
+        console.error("initData не определен. Невозможно загрузить данные.");
+        alert("Не удалось определить initData. Попробуйте перезапустить приложение.");
+        showLoading(false);
+        return false;
+    }
+
     if (isLoading) return false; // Не сохранять во время другой загрузки
 
     showLoading(true);
@@ -169,7 +195,8 @@ const saveEntry = async(entryData) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Authorization': initData, // Передаем initData в headers
             },
             body: JSON.stringify({...entryData, user_id: currentUserId }) // Добавляем user_id
         });
@@ -200,15 +227,20 @@ const saveEntry = async(entryData) => {
 const loadSettings = () => {
     const savedTheme = localStorage.getItem('calendarTheme') || 'telegram';
     const savedLayout = localStorage.getItem('calendarLayout') || 'fill';
+    const savedBackend = localStorage.getItem('calendarBackend') || 'stable';
     applyTheme(savedTheme);
     applyLayout(savedLayout);
+    applyBackend(savedBackend);
     const themeRadio = document.querySelector(`input[name="theme"][value="${savedTheme}"]`);
     const layoutRadio = document.querySelector(`input[name="layout"][value="${savedLayout}"]`);
+    const backendRadio = document.querySelector(`input[name="backend"][value="${savedBackend}"]`);
     if (themeRadio) themeRadio.checked = true;
     if (layoutRadio) layoutRadio.checked = true;
+    if (backendRadio) backendRadio.checked = true;
 };
 const saveTheme = (theme) => localStorage.setItem('calendarTheme', theme);
 const saveLayout = (layout) => localStorage.setItem('calendarLayout', layout);
+const saveBackend = (backend) => localStorage.setItem('calendarBackend', backend);
 const applyTheme = (themeName) => {
 
     if (themeName === 'telegram') {
@@ -249,6 +281,10 @@ const applyLayout = (layoutName) => {
     const daySize = layoutName === 'compact' ? '20px' : '25px';
     appContainer.style.setProperty('--day-size', daySize);
 };
+
+const applyBackend = (backendName) => {
+    saveBackend(backendName);
+}
 
 // --- Rendering ---
 const renderCalendar = (year) => {
@@ -483,13 +519,13 @@ const renderCalendar = (year) => {
                 WomanDay: WomanDay,
             };
 
-            const success = await saveEntry(entryData);
+            const success = await saveEntry(entryData, initData); // шлём initData при вызове
 
             if (success) {
                 hideEditPopup();
                 tg.HapticFeedback.notificationOccurred('success');
                 // Обновляем данные для текущего года после сохранения
-                await loadDataForYear(currentYear, currentUserId);
+                await loadDataForYear(currentYear, currentUserId, initData); // шлём initData при вызове
                 renderCalendar(currentYear); // Перерисовываем календарь с новыми данными
             } else {
                 tg.HapticFeedback.notificationOccurred('warning');
@@ -515,7 +551,7 @@ const renderCalendar = (year) => {
             const minYear = availableYearsData.length > 0 ? Math.min(...availableYearsData) : currentYear -1; // Определяем минимальный год
             if (currentYear > minYear) {
                 currentYear--;
-                const success = await loadDataForYear(currentYear, currentUserId);
+                const success = await loadDataForYear(currentYear, currentUserId, initData); // шлём initData при вызове
                 if (success) {
                     renderCalendar(currentYear);
                     tg.HapticFeedback.impactOccurred("soft");
@@ -530,7 +566,7 @@ const renderCalendar = (year) => {
              if (isLoading) return;
              if (currentYear < ACTUAL_CURRENT_YEAR) {
                  currentYear++;
-                 const success = await loadDataForYear(currentYear, currentUserId);
+                 const success = await loadDataForYear(currentYear, currentUserId, initData); // шлём initData при вызове
                  if (success) {
                     renderCalendar(currentYear);
                     tg.HapticFeedback.selectionChanged();
@@ -545,6 +581,7 @@ const renderCalendar = (year) => {
          const handleSettingsToggle = () => settingsPanel.classList.toggle('settings--visible');
          const handleThemeChange = (event) => { if (event.target.type === 'radio') applyTheme(event.target.value); tg.HapticFeedback.impactOccurred("medium"); };
          const handleLayoutChange = (event) => { if (event.target.type === 'radio') applyLayout(event.target.value); tg.HapticFeedback.impactOccurred("medium"); };
+         const handleBackendChange = (event) => { if (event.target.type === 'radio') applyBackend(event.target.value); tg.HapticFeedback.impactOccurred("medium"); location.reload(); };
 
         const showEditPopup = (dateStr, existingData = null) => {
             selectedDate = dateStr;
@@ -618,6 +655,7 @@ const renderCalendar = (year) => {
              tg.ready(); // Сообщаем Telegram, что WebApp готово
 
              const userData = tg.initDataUnsafe?.user;
+             initData = tg.initData;
 
              tg.SettingsButton.show();
              tg.onEvent('settingsButtonClicked', handleSettingsToggle)
@@ -637,8 +675,12 @@ const renderCalendar = (year) => {
              renderColorOptions(); // Рендерим кнопки выбора цвета
              renderLegend();
 
+             if(localStorage.getItem('calendarBackend') == "test"){
+                API_URL = "/pixels/api/test.php";
+             }
+
              // Загружаем данные для текущего года
-             const initialLoadSuccess = await loadDataForYear(currentYear, currentUserId);
+             const initialLoadSuccess = await loadDataForYear(currentYear, currentUserId, initData); // отправляем initData для проверки запроса
              if (initialLoadSuccess) {
                 renderCalendar(currentYear); // Рендерим календарь
              } else {
@@ -661,6 +703,7 @@ const renderCalendar = (year) => {
              closeSettingsBtn.addEventListener('click', handleSettingsToggle);
              themeOptions.addEventListener('change', handleThemeChange);
              layoutOptions.addEventListener('change', handleLayoutChange);
+             backendOptions.addEventListener('change', handleBackendChange);
              document.addEventListener('keydown', (e) => {
                 if (isLoading) return; // Не обрабатывать Esc во время загрузки
                 if (e.key === 'Escape') {

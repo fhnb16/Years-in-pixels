@@ -12,4 +12,6 @@ $db_user = 'your_db_user';  // Ваше имя пользователя БД
 $db_pass = 'your_db_password'; // Ваш пароль БД
 $db_name = 'your_db_name';    // Имя вашей БД
 
+$botToken = "";
+
 ?>

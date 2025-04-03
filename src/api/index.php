@@ -1,4 +1,4 @@
-<?php
+<?
 
 include_once("config.php");
 
@@ -21,21 +21,82 @@ try {
 // --- Функции API ---
 
 /**
+ * Проверяет hash, полученный от Telegram Web App.
+ * 
+ * @param string $initData Строка initData, полученная от Telegram.
+ * @param string $botToken Токен вашего бота.
+ * @return bool Возвращает true, если hash валиден, иначе false.
+ */
+
+function checkHash(string $initData, string $botToken): bool
+{
+    [$checksum, $sortedInitData] = convertInitData($initData);
+    $secretKey                   = hash_hmac('sha256', $botToken, 'WebAppData', true);
+    $hash                        = bin2hex(hash_hmac('sha256', $sortedInitData, $secretKey, true));
+    
+    if(0 !== strcmp($hash, $checksum)){
+        error_log("Init Data: " . $initData);
+        error_log("Data Check String: " . $sortedInitData);
+        error_log("Secret Key (bin2hex): " . $secretKey);
+        error_log("Calculated Hash: " . $hash);
+        error_log("Received Hash: " . $checksum);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * convert init data to `key=value` and sort it `alphabetically`.
+ *
+ * @param string $initData init data from Telegram (`Telegram.WebApp.initData`)
+ *
+ * @return string[] return hash and sorted init data
+ */
+function convertInitData(string $initData): array
+{
+    $initDataArray = explode('&', rawurldecode($initData));
+    $needle        = 'hash=';
+    $hash          = '';
+
+    foreach ($initDataArray as &$data) {
+        if (substr($data, 0, \strlen($needle)) === $needle) {
+            $hash = substr_replace($data, '', 0, \strlen($needle));
+            $data = null;
+        }
+    }
+    $initDataArray = array_filter($initDataArray);
+    sort($initDataArray);
+
+    return [$hash, implode("\n", $initDataArray)];
+}
+
+/**
  * Получение данных календаря для пользователя за указанный год.
  */
-function getCalendarData($pdo) {
-    if (!isset($_GET['year']) || !isset($_GET['user_id'])) {
+function getCalendarData($pdo, $botToken) {
+    if (!isset($_GET['year']) || !isset($_GET['user_id']) || !isset($_SERVER['HTTP_AUTHORIZATION'])) {
         http_response_code(400); // Bad Request
-        echo json_encode(['success' => false, 'message' => 'Параметры year и user_id обязательны']);
+        echo json_encode(['success' => false, 'message' => 'Параметры year, user_id и init_data обязательны']);
         exit;
     }
 
     $year = filter_var($_GET['year'], FILTER_VALIDATE_INT);
-    $userId = filter_var($_GET['user_id'], FILTER_VALIDATE_INT); // Или FILTER_VALIDATE_FLOAT если ID очень большие
+    $userId = filter_var($_GET['user_id'], FILTER_VALIDATE_INT);
+    //$initData = $_GET['init_data'];
+    $initData = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
     if ($year === false || $userId === false || $userId <= 0) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Некорректные параметры year или user_id']);
+        exit;
+    }
+
+    // Проверка hash
+    if (!checkHash($initData, $botToken, $userId)) {
+        http_response_code(403); // Forbidden
+        error_log("ERROR: initData check failed. initData:" . $initData); // add log for initData
+        echo json_encode(['success' => false, 'message' => 'Не удалось проверить initData. Данные подделаны или устарели.']);
         exit;
     }
 
@@ -82,13 +143,13 @@ function getCalendarData($pdo) {
 /**
  * Создание или обновление записи в календаре.
  */
-function saveCalendarEntry($pdo) {
+function saveCalendarEntry($pdo, $botToken) {
     $input = json_decode(file_get_contents('php://input'), true);
 
     // Валидация входных данных
-    if (!$input || !isset($input['user_id'], $input['date'], $input['mood_key'])) {
+    if (!$input || !isset($input['user_id'], $input['date'], $input['mood_key'], $_SERVER['HTTP_AUTHORIZATION'])) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Неполные данные. Требуются user_id, date, mood_key.']);
+        echo json_encode(['success' => false, 'message' => 'Неполные данные. Требуются user_id, date, mood_key, init_data.']);
         exit;
     }
 
@@ -103,6 +164,8 @@ function saveCalendarEntry($pdo) {
     $romantic = isset($input['romantic']) ? (bool)$input['romantic'] : false;
     $crying = isset($input['crying']) ? (bool)$input['crying'] : false;
     $WomanDay = isset($input['WomanDay']) ? (bool)$input['WomanDay'] : false;
+    //$initData = $input['init_data'];
+    $initData = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
 
     // Простая валидация (добавьте более строгую при необходимости)
@@ -110,6 +173,14 @@ function saveCalendarEntry($pdo) {
          http_response_code(400);
          echo json_encode(['success' => false, 'message' => 'Некорректные данные. Проверьте user_id, date (YYYY-MM-DD), mood_key.']);
          exit;
+    }
+    
+    // Проверка hash
+    if (!checkHash($initData, $botToken, $userId)) {
+        http_response_code(403); // Forbidden
+        error_log("ERROR: initData check failed. initData:" . $initData); // add log for initData
+        echo json_encode(['success' => false, 'message' => 'Не удалось проверить initData. Данные подделаны или устарели.']);
+        exit;
     }
     // Тут можно добавить проверку moodKey на допустимые значения
 
@@ -167,10 +238,10 @@ header('Content-Type: application/json'); // Все ответы будут в J
 
 switch ($method) {
     case 'GET':
-        getCalendarData($pdo);
+        getCalendarData($pdo, $bot_token);
         break;
     case 'POST':
-        saveCalendarEntry($pdo);
+        saveCalendarEntry($pdo, $bot_token);
         break;
     default:
         http_response_code(405); // Method Not Allowed

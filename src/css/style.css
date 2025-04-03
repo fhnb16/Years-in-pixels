@@ -348,6 +348,36 @@ body[data-theme="modern"] {
     /* Requires importing Inter font */
 }
 
+body[data-theme="halflife"] {
+    --color-bg: #181818;
+    --color-text: #ff7800;
+    --color-border: #ff7800;
+    --color-header-bg: #242424;
+    --color-day-bg: #282828;
+    --color-day-bg-hover: #3a3a3a;
+    --color-day-invalid-bg: #ff7800;
+    --color-day-invalid-text: #ffffff;
+    --font-main: 'Roboto', sans-serif;
+}
+
+body[data-theme="cyberpunk"] {
+    --color-bg: #0f0f0f;
+    --color-text: #ffed00;
+    --color-border: #00ffff;
+    --color-header-bg: #1a1a1a;
+    --color-day-bg: #202020;
+    --color-day-bg-hover: #303030;
+    --color-day-invalid-bg: #ff003c;
+    --color-day-invalid-text: #ffed00;
+    --color-settings-bg: #1a1a1a;
+    --color-popup-bg: rgba(15, 15, 15, 0.95);
+    --color-popup-shadow: rgba(0, 255, 255, 0.3);
+    --color-button-bg: #ff003c;
+    --color-button-text: #ffffff;
+    --color-button-hover-bg: #c4002b;
+    --font-main: 'Orbitron', sans-serif;
+}
+
 
 /* --- General --- */
 
