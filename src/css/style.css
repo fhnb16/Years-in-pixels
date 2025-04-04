@@ -708,6 +708,12 @@ input {
     padding-bottom: 10px;
 }
 
+@media screen and (max-width: 420px) {
+    .popup__header {
+        font-size: 1.0em;
+    }
+}
+
 .popup__section {
     margin-bottom: 20px;
 }
@@ -870,6 +876,10 @@ input {
     margin-bottom: 15px;
     border-bottom: 1px solid var(--color-border);
     padding-bottom: 5px;
+}
+
+.settings__subtitle {
+    line-height: 2.6;
 }
 
 .settings__options label {

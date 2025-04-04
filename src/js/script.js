@@ -125,10 +125,6 @@ const loadDataForYear = async(year, userId, initData) => {
 
     showLoading(true);
     try {
-        let encodedInitData = encodeURIComponent(initData);
-        console.log("InitData: ", initData);
-        console.log("encodedInitData: ", encodedInitData);
-        console.log("decodedInitData: ", decodeURIComponent(encodedInitData));
         const response = await fetch(`${API_URL}?year=${year}&user_id=${userId}`, {
             method: 'GET',
             headers: {
