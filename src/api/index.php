@@ -143,8 +143,7 @@ function getCalendarData($pdo, $botToken) {
 /**
  * Создание или обновление записи в календаре.
  */
-function saveCalendarEntry($pdo, $botToken) {
-    $input = json_decode(file_get_contents('php://input'), true);
+function saveCalendarEntry($pdo, $botToken, $input) {
 
     // Валидация входных данных
     if (!$input || !isset($input['user_id'], $input['date'], $input['mood_key'], $_SERVER['HTTP_AUTHORIZATION'])) {
@@ -241,7 +240,12 @@ switch ($method) {
         getCalendarData($pdo, $bot_token);
         break;
     case 'POST':
-        saveCalendarEntry($pdo, $bot_token);
+        $input = json_decode(file_get_contents('php://input'), true);
+        if(isset($input['mode']) && $input['mode'] == "adminStats"){
+            
+        }else{
+            saveCalendarEntry($pdo, $bot_token, $input);
+        }
         break;
     default:
         http_response_code(405); // Method Not Allowed

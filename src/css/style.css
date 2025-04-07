@@ -256,6 +256,28 @@ body[data-theme="steam"] {
     --font-main: 'Arial', sans-serif;
 }
 
+body[data-theme="steam2003"] {
+    --color-bg: #0f1e11;
+    --color-text: #c8d6c4;
+    --color-border: #5c7f5a;
+    --color-header-bg: #1a2b1d;
+    --color-day-bg: #19311f;
+    --color-day-bg-hover: #2d5032;
+    --color-day-invalid-bg: #3e5f3c;
+    --color-day-invalid-text: #7f997e;
+    --color-popup-bg: #142514;
+    --color-popup-shadow: #3a5b3a;
+    --color-button-bg: #264a28;
+    --color-button-text: #d2eac5;
+    --color-button-hover-bg: #3a7341;
+    --color-settings-bg: #112011;
+    --color-input-bg: #1c2f1c;
+    --color-input-border: #4e6f4b;
+    --font-main: 'Verdana', 'Tahoma', sans-serif;
+    box-shadow: 2px 2px 0 #000, 4px 4px 0 #3a5b3a;
+    border: 1px solid var(--color-border);
+}
+
 body[data-theme="reddit"] {
     --color-bg: #ffffff;
     --color-text: #000000;
@@ -353,6 +375,7 @@ body[data-theme="halflife"] {
     --color-text: #ff7800;
     --color-border: #ff7800;
     --color-header-bg: #242424;
+    --color-settings-bg: rgba(23, 26, 33, 0.95);
     --color-day-bg: #282828;
     --color-day-bg-hover: #3a3a3a;
     --color-day-invalid-bg: #ff7800;
