@@ -20,6 +20,8 @@ const MOOD_ACTIVITY = {
     'WomanDay': { emoji: '🩸' },
 };
 
+const MIN_SHARE_WIDTH = 640; // Минимальная ширина скриншота
+
 // --- DOM Elements ---
 const calendarGrid = document.getElementById('calendarGrid');
 const monthsHeader = document.getElementById('monthsHeader');
@@ -44,6 +46,7 @@ const viewPopupDescription = document.getElementById('viewPopupDescription');
 const editDayBtn = document.getElementById('editDayBtn');
 const closeViewPopupBtn = document.getElementById('closeViewPopupBtn');
 const cancelViewBtn = document.getElementById('cancelViewBtn');
+const shareButton = document.getElementById('shareButton');
 const settingsButton = document.getElementById('settingsButton');
 const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -80,18 +83,279 @@ let selectedDate = null; // YYYY-MM-DD
 let selectedColorKey = null;
 let currentUserId = null; // Telegram User ID
 let isLoading = false; // Флаг для индикации загрузки
+let originalLayoutClass = null; // Для хранения исходного класса layout
 
 // --- Telegram WebApp ---
 const tg = window.Telegram.WebApp;
 let initData = null; // Переменная для хранения initData
 
-// --- Utility Functions (остаются те же) ---
+// --- Utility Functions ---
 const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 const formatDate = (year, month, day) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 const parseDate = (dateString) => {
     const [year, month, day] = dateString.split('-').map(Number);
     return { year, month: month - 1, day }; // month is 0-indexed internally
 };
+
+/**
+ * Скрывает элементы с классом 'uncapturable' перед скриншотом.
+ * @returns {Function} Функция для восстановления видимости.
+ */
+const hideUncapturableElements = () => {
+    const uncapturableElements = document.querySelectorAll('.uncapturable');
+    const originalDisplay = [];
+
+    uncapturableElements.forEach((el, index) => {
+        originalDisplay[index] = el.style.display;
+        el.style.display = 'none';
+    });
+
+    return () => {
+        uncapturableElements.forEach((el, index) => {
+            el.style.display = originalDisplay[index] || '';
+        });
+    };
+};
+
+/**
+ * Делает скриншот указанных элементов.
+ * @param {HTMLElement[]} elements Массив элементов для скриншота.
+ * @param {number} minWidth Минимальная ширина результирующего изображения.
+ * @returns {Promise<Blob>} Promise, который разрешается в Blob изображения JPEG.
+ */
+const captureElementsAsImage = async (elements, minWidth) => {
+    // Несмотря на название функции, мы будем захватывать только body целиком
+    // Это проще и надежнее для получения полного скриншота с правильными пропорциями
+    console.log("captureElementsAsImage: Запуск захвата body. Минимальная ширина:", minWidth);
+    
+    if (typeof html2canvas === 'undefined') {
+        throw new Error('Библиотека html2canvas не найдена.');
+    }
+
+    const restoreVisibility = hideUncapturableElements();
+
+    // Сохраняем оригинальные стили body
+    const originalBodyWidth = appBody.style.width;
+    const originalBodyMinWidth = appBody.style.minWidth;
+    const originalBodyOverflowX = appBody.style.overflowX;
+    
+    // Сохраняем и меняем layout класс
+    const layoutClasses = ['app--layout-full', 'app--layout-half', 'app--layout-compact', 'app--layout-fill'];
+    const currentLayoutClasses = [...appBody.classList].filter(cls => layoutClasses.includes(cls));
+    originalLayoutClass = currentLayoutClasses[0] || 'app--layout-full';
+    appBody.classList.remove(...layoutClasses);
+    appBody.classList.add('app--layout-full');
+    
+    // Удаляем потенциальные ограничения ширины со .app для скриншота
+    const appElement = document.querySelector('.app');
+    const originalAppMaxWidth = appElement ? appElement.style.maxWidth : '';
+    if (appElement) {
+        appElement.style.maxWidth = 'none'; // Убираем ограничение ширины
+    }
+
+    try {
+        console.log("captureElementsAsImage: Установка временной ширины для body.");
+        // --- ВАЖНО: Устанавливаем фиксированную минимальную ширину для body перед скриншотом ---
+        // Это должно заставить layout пересчитаться и html2canvas захватить правильную область
+        appBody.style.width = `${minWidth}px`;
+        appBody.style.minWidth = `${minWidth}px`;
+        appBody.style.overflowX = 'hidden'; // На всякий случай скрываем горизонтальный скролл
+        
+        // Принудительная перерисовка браузера
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        console.log("captureElementsAsImage: Вызов html2canvas для document.body");
+        const canvas = await html2canvas(document.body, {
+            backgroundColor: getComputedStyle(document.documentElement)
+                .getPropertyValue('--color-bg')
+                .trim() || getComputedStyle(document.body).backgroundColor || '#ffffff',
+            scale: 2, // Увеличиваем качество
+            useCORS: true,
+            logging: false, // Поставить true для отладки
+            // width, height, x, y НЕ указываем, пусть захватит всё тело с новыми размерами
+        });
+
+        console.log("captureElementsAsImage: html2canvas завершен. Ширина canvas:", canvas.width, "Высота:", canvas.height);
+        
+        // Проверка, что canvas не пустой
+        if (canvas.width === 0 || canvas.height === 0) {
+             throw new Error("Финальный canvas имеет нулевой размер.");
+        }
+
+        return new Promise((resolve, reject) => {
+            console.log("captureElementsAsImage: Создание Blob из canvas...");
+            const trimmedCanvas = trimCanvasBottom(canvas);
+            trimmedCanvas.toBlob((blob) => {
+                if (blob) {
+                    console.log("captureElementsAsImage: Blob успешно создан.");
+                    resolve(blob);
+                } else {
+                    console.error("captureElementsAsImage: Не удалось создать Blob из canvas");
+                    reject(new Error("Не удалось создать изображение (Blob пуст)"));
+                }
+            }, 'image/jpeg', 0.92);
+        });
+
+    } finally {
+        console.log("captureElementsAsImage: Восстановление исходных стилей и классов.");
+        // --- Восстанавливаем оригинальные стили body ---
+        appBody.style.width = originalBodyWidth || '';
+        appBody.style.minWidth = originalBodyMinWidth || '';
+        appBody.style.overflowX = originalBodyOverflowX || '';
+        
+        // Восстанавливаем layout класс
+        appBody.classList.remove('app--layout-full');
+        if (originalLayoutClass && layoutClasses.includes(originalLayoutClass)) {
+            appBody.classList.add(originalLayoutClass);
+        }
+        
+        // Восстанавливаем стиль .app
+        if (appElement) {
+            appElement.style.maxWidth = originalAppMaxWidth;
+        }
+        
+        restoreVisibility();
+        console.log("captureElementsAsImage: Восстановление завершено.");
+    }
+};
+
+function trimCanvasBottom(canvas) {
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    let lastNonEmptyRow = canvas.height - 1;
+    const rowLength = canvas.width * 4;
+
+    for (let y = canvas.height - 1; y >= 0; y--) {
+        let isEmpty = true;
+        for (let x = 0; x < rowLength; x += 4) {
+            // Проверяем, что пиксель не белый (255,255,255) и не прозрачный
+            const idx = y * rowLength + x;
+            if (!(data[idx] === 255 && data[idx + 1] === 255 && data[idx + 2] === 255 && data[idx + 3] === 255)) {
+                isEmpty = false;
+                break;
+            }
+        }
+        if (!isEmpty) {
+            lastNonEmptyRow = y;
+            break;
+        }
+    }
+
+    const trimmedHeight = lastNonEmptyRow + 1;
+    if (trimmedHeight < canvas.height) {
+        const trimmedCanvas = document.createElement('canvas');
+        trimmedCanvas.width = canvas.width;
+        trimmedCanvas.height = trimmedHeight;
+        trimmedCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        return trimmedCanvas;
+    }
+    return canvas;
+}
+
+/**
+ * Отправляет Blob изображения на бэкенд.
+ * @param {Blob} blob Blob изображения.
+ * @param {number} userId Telegram User ID.
+ * @param {string} initData Данные инициализации Telegram.
+ */
+const sendImageToBackend = async (blob, userId, initData) => {
+    if (!userId) {
+        const errorMsg = 'User ID не определен. Невозможно отправить изображение.';
+        console.error(errorMsg);
+        tg.showAlert(errorMsg);
+        return;
+    }
+    if (!initData) {
+        const errorMsg = 'initData не определен. Невозможно отправить изображение.';
+        console.error(errorMsg);
+        tg.showAlert(errorMsg);
+        return;
+    }
+
+    try {
+        console.log("Начинаем отправку изображения на бэкенд...");
+
+        // Показываем индикатор загрузки, так как преобразование и отправка могут занять время
+        showLoading(true);
+        tg.MainButton?.showProgress(); 
+
+        // 1. Преобразуем Blob в Base64
+        const base64Image = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                // reader.result содержит строку данных URL, например: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."
+                // Нам нужна только часть после запятой
+                const base64String = reader.result.split(',')[1];
+                if (base64String) {
+                    resolve(base64String);
+                } else {
+                    reject(new Error('Не удалось преобразовать Blob в Base64.'));
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob); // Читаем Blob как Data URL
+        });
+
+        console.log("Blob успешно преобразован в Base64. Длина строки:", base64Image.length);
+
+        // 2. Подготавливаем данные для отправки
+        const payload = {
+            mode: "saveImage",
+            user_id: userId, // Используем полученный userId
+            image: base64Image
+        };
+
+        console.log("Отправка данных на бэкенд:", API_URL, payload);
+
+        // 3. Отправляем POST запрос
+        const response = await fetch(API_URL, { // Используем глобальную переменную API_URL
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': initData, // Передаем initData в headers для аутентификации
+            },
+            body: JSON.stringify(payload)
+        });
+
+        console.log("Ответ от бэкенда получен:", response.status, response.statusText);
+
+        if (!response.ok) {
+            // Попробуем получить текст ошибки от сервера
+            let errorText = '';
+            try {
+                const errorResult = await response.json();
+                errorText = errorResult.message || errorResult.error || response.statusText;
+            } catch (e) {
+                errorText = `${response.status} ${response.statusText}`;
+            }
+            throw new Error(`Ошибка сети или сервера: ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log("Успешный ответ от бэкенда:", result);
+
+        if (result.success) {
+            console.log('Изображение успешно отправлено на бэкенд.');
+            tg.showAlert('Скриншот отправлен! Бот пришлет его вам в чат.');
+        } else {
+            const errorMsg = `Ошибка API: ${result.message || 'Неизвестная ошибка при отправке изображения.'}`;
+            throw new Error(errorMsg);
+        }
+
+    } catch (error) {
+        console.error('Ошибка при отправке изображения на бэкенд:', error);
+        tg.showAlert('Ошибка при отправке скриншота: ' + error.message);
+    } finally {
+        // Всегда скрываем индикатор загрузки
+        showLoading(false);
+        tg.MainButton?.hideProgress();
+    }
+};
+
 
 // --- Loading Indicator ---
 const showLoading = (show) => {
@@ -646,6 +910,78 @@ const renderCalendar = (year) => {
         };
         const hideViewPopup = () => viewPopup.classList.remove('popup--visible');
 
+        const handleShare = async () => {
+            if (shareButton.disabled) {
+                console.log("html2canvas ещё не загружен");
+                tg.showAlert('Пожалуйста, подождите пару секунд или обновите страницу.');
+                return;
+            }
+            if (isLoading) {
+                tg.showAlert('Пожалуйста, дождитесь завершения текущей операции.');
+                return;
+            }
+
+            showLoading(true);
+            tg.MainButton.showProgress();
+
+            try {
+                // --- Отладка: Проверка наличия элементов ---
+                console.log("Начало создания скриншота...");
+                const appElement = document.querySelector('.app');
+                const legendElement = document.getElementById('legend');
+                const bodyElement = document.body;
+
+                console.log("Элемент .app:", appElement);
+                console.log("Элемент #legend:", legendElement);
+                console.log("Элемент body:", bodyElement);
+
+                if (!appElement || !legendElement) {
+                    throw new Error("Не удалось найти элементы '.app' или '#legend' для скриншота.");
+                }
+
+                // --- Отладка: Проверка html2canvas ---
+                if (typeof html2canvas === 'undefined') {
+                    throw new Error('Библиотека html2canvas не найдена или не загрузилась корректно.');
+                }
+                console.log("html2canvas доступен:", typeof html2canvas);
+
+                // --- Отладка: Выбор элементов ---
+                // Вариант 1: Только календарь и легенда (попробуем сначала его)
+                //const elementsToCapture = [appElement, legendElement];
+                // Вариант 2: Весь body (раскомментировать, если вариант 1 не работает)
+                const elementsToCapture = [bodyElement];
+                
+                console.log("Элементы для захвата:", elementsToCapture);
+
+                const imageBlob = await captureElementsAsImage(elementsToCapture, MIN_SHARE_WIDTH);
+                console.log("Скриншот создан, Blob:", imageBlob);
+                if (imageBlob) {
+                    await sendImageToBackend(imageBlob, currentUserId, initData);
+                } else {
+                    throw new Error("Созданный Blob изображения пуст.");
+                }
+            } catch (error) {
+                console.error('Ошибка в handleShare:', error); // Более конкретная ошибка
+                // Проверим, есть ли у объекта ошибки свойство message
+                const errorMessage = error && error.message ? error.message : String(error);
+                tg.showAlert('Не удалось создать скриншот: ' + errorMessage);
+            } finally {
+                if (isLoading) { // Дополнительная проверка на случай, если showLoading(false) уже был вызван
+                    showLoading(false); 
+                }
+                tg.MainButton.hideProgress();
+            }
+        };
+
+        const checkInterval = setInterval(() => {
+            if (typeof html2canvas !== 'undefined') {
+                shareButton.disabled = false;
+                shareButton.style.opacity = 1;
+                shareButton.style.cursor = 'pointer';
+                clearInterval(checkInterval);
+            }
+        }, 500);
+
         // --- Initialization ---
         const init = async () => {
              tg.ready(); // Сообщаем Telegram, что WebApp готово
@@ -654,7 +990,7 @@ const renderCalendar = (year) => {
              initData = tg.initData;
 
              tg.SettingsButton.show();
-             tg.onEvent('settingsButtonClicked', handleSettingsToggle)
+             tg.onEvent('settingsButtonClicked', handleSettingsToggle);
 
              if (!userData) {
                  console.error("Не удалось получить данные пользователя из Telegram.");
@@ -695,6 +1031,7 @@ const renderCalendar = (year) => {
              editDayBtn.addEventListener('click', handleEditFromView);
              prevYearBtn.addEventListener('click', handlePrevYear);
              nextYearBtn.addEventListener('click', handleNextYear);
+             shareButton.addEventListener('click', handleShare);
              settingsButton.addEventListener('click', handleSettingsToggle);
              closeSettingsBtn.addEventListener('click', handleSettingsToggle);
              themeOptions.addEventListener('change', handleThemeChange);

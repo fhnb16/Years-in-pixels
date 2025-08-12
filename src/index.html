@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Год в пикселях</title>
-    <link rel="stylesheet" href="css/style.css?9">
+    <link rel="stylesheet" href="css/style.css?16">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 
@@ -13,9 +13,9 @@
 
     <div class="app">
         <header class="app__header">
-            <button class="header__nav-button" id="prevYearBtn" title="Предыдущий год">&lt;</button>
+            <button class="header__nav-button uncapturable" id="prevYearBtn" title="Предыдущий год">&lt;</button>
             <h1 class="header__year" id="currentYearDisplay">2025</h1>
-            <button class="header__nav-button" id="nextYearBtn" title="Следующий год">&gt;</button>
+            <button class="header__nav-button uncapturable" id="nextYearBtn" title="Следующий год">&gt;</button>
         </header>
 
         <main class="app__calendar" id="calendarContainer">
@@ -30,7 +30,7 @@
         </main>
     </div>
 
-    <div class="popup popup--edit" id="editPopup">
+    <div class="popup popup--edit uncapturable" id="editPopup">
         <div class="popup__content">
             <button class="popup__close-button" aria-label="Закрыть" id="closeEditPopupBtn">&times;</button>
             <h2 class="popup__header" id="editPopupHeader">Добавить запись</h2>
@@ -65,7 +65,7 @@
         </div>
     </div>
 
-    <div class="popup popup--view" id="viewPopup">
+    <div class="popup popup--view uncapturable" id="viewPopup">
         <div class="popup__content">
             <button class="popup__close-button" aria-label="Закрыть" id="closeViewPopupBtn">&times;</button>
             <h2 class="popup__header" id="viewPopupHeader">Просмотр дня</h2>
@@ -102,9 +102,12 @@
 
     <div id="legend" class="colorsLegend"></div>
 
-    <button class="settings-button" id="settingsButton" title="Настройки">Настройки ⚙️</button>
+    <div class="group uncapturable">
+        <button class="share-button" id="shareButton" title="Поделиться" disabled style="opacity: 0.5; cursor: not-allowed;">Поделиться 🔁</button>
+        <button class="settings-button" id="settingsButton" title="Настройки">Настройки ⚙️</button>
+    </div>
 
-    <div class="settings" id="settingsPanel">
+    <div class="settings uncapturable" id="settingsPanel">
         <button class="settings__close-button" aria-label="Закрыть настройки" id="closeSettingsBtn">&times;</button>
         <h2 class="settings__title">Настройки</h2>
 
@@ -145,7 +148,7 @@
 
         <div class="settings__group">
             <h3 class="settings__subtitle">Прочее</h3>
-            <a href="https://t.me/stickers_feedback_bot" class="btn center">Обратная связь</a>
+            <a href="https://t.me/stickers_feedback_bot" class="btn center">Обратная связь 🚀</a>
             <? include_once('metrics.html'); ?>
         </div>
 
@@ -160,10 +163,12 @@
             <? } ?>
     </div>
 
+    <script src="https://dev.fhnb.ru/assets/view/html2canvas/1.4.1/f/html2canvas.min.js"></script>
+
     <script>
         let API_URL = 'api/'; // Путь к PHP файлу api
     </script>
-    <script type="text/javascript" src="js/script.js?9"></script>
+    <script type="text/javascript" src="js/script.js?16"></script>
 
 </body>
 
