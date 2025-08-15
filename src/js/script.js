@@ -185,7 +185,7 @@ const captureElementsAsImage = async (elements, minWidth) => {
 
         return new Promise((resolve, reject) => {
             console.log("captureElementsAsImage: Создание Blob из canvas...");
-            const trimmedCanvas = trimCanvasBottom(canvas);
+            const trimmedCanvas = trimCanvas(canvas);
             trimmedCanvas.toBlob((blob) => {
                 if (blob) {
                     console.log("captureElementsAsImage: Blob успешно создан.");
@@ -253,6 +253,104 @@ function trimCanvasBottom(canvas) {
         return trimmedCanvas;
     }
     return canvas;
+}
+
+/**
+ * Обрезает прозрачные или белые области с краев canvas.
+ * @param {HTMLCanvasElement} canvas Исходный canvas.
+ * @param {string} [backgroundColor='rgba(255, 255, 255, 0)'] Цвет, который считается "пустым".
+ *                                     По умолчанию - белый или прозрачный.
+ * @returns {HTMLCanvasElement} Новый обрезанный canvas или оригинальный, если обрезка не нужна.
+ */
+function trimCanvas(canvas, backgroundColor = 'rgba(255, 255, 255, 0)') {
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Если canvas пуст, возвращаем его как есть
+    if (width === 0 || height === 0) {
+        return canvas;
+    }
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    // Парсим цвет фона для сравнения
+    let emptyPixel = { r: 255, g: 255, b: 255, a: 0 }; // По умолчанию
+    if (backgroundColor === 'rgba(255, 255, 255, 0)') {
+        // Уже установлено по умолчанию
+    } else if (backgroundColor.startsWith('rgba(')) {
+        const rgba = backgroundColor.match(/\d+/g);
+        if (rgba && rgba.length >= 4) {
+            emptyPixel = { r: parseInt(rgba[0]), g: parseInt(rgba[1]), b: parseInt(rgba[2]), a: parseInt(rgba[3]) * 255 };
+        }
+    } else if (backgroundColor.startsWith('rgb(')) {
+        const rgb = backgroundColor.match(/\d+/g);
+        if (rgb && rgb.length >= 3) {
+            emptyPixel = { r: parseInt(rgb[0]), g: parseInt(rgb[1]), b: parseInt(rgb[2]), a: 255 };
+        }
+    }
+    // Для простоты можно оставить только проверку на белый+прозрачный
+
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    const rowLength = width * 4;
+
+    // Проходим по всем пикселям
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = (y * rowLength) + (x * 4);
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
+
+            // Проверяем, является ли пиксель "пустым"
+            // Упрощенная проверка: белый и полностью прозрачный ИЛИ полностью белый и непрозрачный (как предыдущая)
+            // Более точная проверка: if (!(r === emptyPixel.r && g === emptyPixel.g && b === emptyPixel.b && a === emptyPixel.a))
+            if (!(r === 255 && g === 255 && b === 255 && a === 255)) { // Используем старую проверку для совместимости
+                // Пиксель не пустой, обновляем границы
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x);
+                maxY = Math.max(maxY, y);
+            }
+        }
+    }
+
+    // Если не было найдено ни одного непустого пикселя
+    if (minX > maxX || minY > maxY) {
+        console.warn("Canvas полностью пустой или состоит только из 'пустых' пикселей.");
+        // Можно вернуть canvas 1x1 пиксель или оригинальный
+        // Возвращаем оригинальный, как и делала старая функция в случае полной пустоты
+        return canvas;
+    }
+
+    // Рассчитываем размеры нового canvas
+    const trimmedWidth = maxX - minX + 1;
+    const trimmedHeight = maxY - minY + 1;
+
+    // Если размеры не изменились, возвращаем оригинальный canvas
+    if (trimmedWidth === width && trimmedHeight === height) {
+        return canvas;
+    }
+
+    // Создаем новый canvas с обрезанными размерами
+    const trimmedCanvas = document.createElement('canvas');
+    trimmedCanvas.width = trimmedWidth;
+    trimmedCanvas.height = trimmedHeight;
+
+    // Рисуем обрезанную часть на новый canvas
+    trimmedCanvas.getContext('2d').drawImage(
+        canvas,
+        minX, minY, trimmedWidth, trimmedHeight, // источник (область на оригинальном canvas)
+        0, 0, trimmedWidth, trimmedHeight        // назначение (на весь новый canvas)
+    );
+
+    return trimmedCanvas;
 }
 
 /**

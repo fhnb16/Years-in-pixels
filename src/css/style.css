@@ -684,7 +684,19 @@ input {
     border-color: transparent;
     cursor: default;
     pointer-events: none;
-    opacity: 0.7;
+    opacity: 0.28;
+    position: relative;
+    overflow: hidden;
+}
+
+.calendar__day--invalid:after {
+    position: absolute;
+    content: '—';
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
 }
 
 .calendar__day--filled {
