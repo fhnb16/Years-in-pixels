@@ -657,6 +657,81 @@ function saveCalendarEntry($pdo, $botToken, $input) {
     }
 }
 
+function hideCalendarEntry($pdo, $botToken, $input) {
+
+    // Валидация входных данных
+    if (!$input || !isset($input['user_id'], $input['date'], $_SERVER['HTTP_AUTHORIZATION'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Неполные данные. Требуются user_id, date, init_data.']);
+        exit;
+    }
+
+    $userId = filter_var($input['user_id'], FILTER_VALIDATE_INT);
+    $date = $input['date']; // Ожидается формат YYYY-MM-DD
+    $initData = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+
+    // Простая валидация
+    if ($userId === false || $userId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+         http_response_code(400);
+         echo json_encode(['success' => false, 'message' => 'Некорректные данные. Проверьте user_id и date (YYYY-MM-DD).']);
+         exit;
+    }
+    
+    // Проверка hash и обновление данных пользователя (опционально, для логирования)
+    try {
+        upsertUser($pdo, $initData, $botToken);
+    } catch (Exception $e) {
+        // Можно не прерывать выполнение, если upsert не критичен для удаления, но логировать стоит
+        error_log("INFO (hideEntry): User upsert failed (not critical). " . $e->getMessage());
+        // Если строго, можно прервать:
+        // http_response_code(403);
+        // echo json_encode(['success' => false, 'message' => 'Ошибка обработки данных пользователя: ' . $e->getMessage()]);
+        // exit;
+    }
+
+    try {
+        // --- ВАРИАНТ 1: Пометить запись как удалённую ---
+        // Предполагается, что в таблице `calendar_entries` есть столбец `is_deleted` (TINYINT(1) DEFAULT 0)
+        //$sql = "UPDATE calendar_entries SET is_deleted = 1 WHERE user_id = :user_id AND entry_date = :entry_date";
+
+        // --- ВАРИАНТ 2: Удалить запись физически ---
+         $sql = "DELETE FROM calendar_entries WHERE user_id = :user_id AND entry_date = :entry_date";
+
+        // --- ВАРИАНТ 3: Изменить mood_key на специальный ---
+        // $sql = "UPDATE calendar_entries SET mood_key = 'deleted' WHERE user_id = :user_id AND entry_date = :entry_date";
+        // Убедитесь, что 'deleted' не конфликтует с существующими ключами настроений.
+
+        $stmt = $pdo->prepare($sql);
+        $result = $stmt->execute([
+            'user_id' => $userId,
+            'entry_date' => $date
+        ]);
+        
+        // Уменьшаем счётчик записей пользователя, если запись была удалена
+        // (это имеет смысл, если вы используете user_entriestotal как счётчик видимых записей)
+        // if ($stmt->rowCount() > 0) {
+        //     $updateUserStmt = $pdo->prepare("UPDATE calendar_users SET user_entriestotal = GREATEST(0, user_entriestotal - 1) WHERE user_id = :user_id");
+        //     $updateUserStmt->execute(['user_id' => $userId]);
+        // }
+
+        if ($stmt->rowCount() > 0) {
+             echo json_encode(['success' => true, 'message' => 'Запись успешно скрыта/удалена.']);
+        } else {
+             // Запись не найдена или уже удалена
+             echo json_encode(['success' => true, 'message' => 'Запись не найдена или уже была скрыта.']);
+             // Можно вернуть 404, если хотите строго различать "успех" и "не найдено"
+             // http_response_code(404);
+             // echo json_encode(['success' => false, 'message' => 'Запись не найдена.']);
+             // exit;
+        }
+
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Ошибка скрытия/удаления в БД: ' . $e->getMessage()]);
+        exit;
+    }
+}
+
 // --- Маршрутизация запросов ---
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -692,6 +767,16 @@ switch ($method) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
+    } else if (isset($input['mode']) && $input['mode'] == "hideEntry") { // Убедитесь, что 'hideEntry' совпадает с mode в JS
+        try {
+            hideCalendarEntry($pdo, $bot_token, $input);
+        } catch (Exception $e) {
+            // Если hideCalendarEntry выбрасывает исключение, оно будет поймано здесь
+            http_response_code(500); // Или другой подходящий код
+            echo json_encode(['success' => false, 'message' => 'Ошибка обработки запроса на скрытие: ' . $e->getMessage()]);
+        }
+        exit; // Важно выйти после обработки
+    // --- КОНЕЦ НОВОГО БЛОКА ---
     } else {
             saveCalendarEntry($pdo, $bot_token, $input);
         }

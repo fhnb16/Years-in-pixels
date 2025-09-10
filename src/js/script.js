@@ -44,6 +44,7 @@ const viewPopupColor = document.getElementById('viewPopupColor');
 const viewPopupMood = document.getElementById('viewPopupMood');
 const viewPopupDescription = document.getElementById('viewPopupDescription');
 const editDayBtn = document.getElementById('editDayBtn');
+const removeDayBtn = document.getElementById('removeDayBtn');
 const closeViewPopupBtn = document.getElementById('closeViewPopupBtn');
 const cancelViewBtn = document.getElementById('cancelViewBtn');
 const shareButton = document.getElementById('shareButton');
@@ -52,7 +53,7 @@ const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const themeOptions = document.getElementById('themeOptions');
 const layoutOptions = document.getElementById('layoutOptions');
-const backendOptions = document.getElementById('backendOptions');
+const backendOptions = document.getElementById('backendOptions') || null;
 
 const editAlcoholCheckbox = document.getElementById('editAlcohol');
 const editSportCheckbox = document.getElementById('editSport');
@@ -463,8 +464,9 @@ const showLoading = (show) => {
     // Блокируем кнопки во время загрузки
     prevYearBtn.disabled = show || (currentYear <= Math.min(...availableYearsData));
     nextYearBtn.disabled = show || (currentYear >= ACTUAL_CURRENT_YEAR);
-    saveDayBtn.disabled = show;
-    editDayBtn.disabled = show;
+    try{saveDayBtn.disabled = show;}catch{}
+    try{editDayBtn.disabled = show;}catch{}
+    try{removeDayBtn.disabled = show;}catch{}
     // Можно блокировать клики по ячейкам календаря
     calendarGrid.style.pointerEvents = show ? 'none' : 'auto';
 };
@@ -578,6 +580,67 @@ const saveEntry = async(entryData, initData) => {
         return false; // Ошибка
     } finally {
         showLoading(false);
+    }
+};
+
+/**
+ * Отправляет запрос на бэкенд для "скрытия" записи (например, помечая её как удалённую или изменяя ID).
+ * @param {string} dateStr Строка даты в формате YYYY-MM-DD.
+ * @param {string} initData Данные инициализации Telegram для аутентификации.
+ * @returns {Promise<boolean>} True, если запрос успешен, иначе False.
+ */
+const hideEntry = async (dateStr, initData) => {
+    if (!currentUserId) {
+        console.error("User ID не определен. Невозможно скрыть запись.");
+        tg.showAlert("Не удалось определить пользователя Telegram. Попробуйте перезапустить приложение.");
+        return false;
+    }
+    if (!initData) {
+        console.error("initData не определен. Невозможно скрыть запись.");
+        tg.showAlert("Не удалось определить initData. Попробуйте перезапустить приложение.");
+        return false;
+    }
+    if (isLoading) return false; // Не выполнять во время другой загрузки
+
+    showLoading(true); // Показываем индикатор загрузки
+    try {
+        // Предполагаем, что бэкенд ожидает объект с mode, date и user_id
+        // и интерпретирует это как запрос на скрытие/удаление записи за эту дату.
+        const payload = {
+            mode: "hideEntry", // Укажите правильный mode, ожидаемый вашим API
+            date: dateStr,     // Отправляем дату записи
+            user_id: currentUserId // Добавляем user_id для идентификации
+            // Если бэкенд ожидает отрицательный ID или другой флаг, добавьте его сюда
+            // Например: action: "hide" или status: "deleted"
+        };
+
+        const response = await fetch(API_URL, { // Используем глобальную переменную API_URL
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': initData, // Передаем initData в headers для аутентификации
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка сети или сервера: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(`Ошибка API: ${result.message || 'Неизвестная ошибка скрытия записи'}`);
+        }
+
+        console.log('Запись успешно скрыта/удалена:', result.message);
+        return true; // Успех
+    } catch (error) {
+        console.error('Ошибка скрытия записи:', error);
+        tg.showAlert(`Не удалось скрыть запись: ${error.message}`);
+        return false; // Ошибка
+    } finally {
+        showLoading(false); // Всегда скрываем индикатор загрузки
     }
 };
 
@@ -904,6 +967,34 @@ const renderCalendar = (year) => {
              }
         };
 
+        const handleRemoveFromView = () => {
+             if (!selectedDate) return;
+             const { year, month, day } = parseDate(selectedDate);
+             const dayData = calendarData[year]?.[month + 1]?.[day];
+             if (year === ACTUAL_CURRENT_YEAR) { // Доп. проверка, что редактируем текущий год
+                hideViewPopup();
+                Telegram.WebApp.showConfirm("Ты точно хочешь это сделать?", async function(confirmed) {
+                    if (confirmed) {
+                        console.log("Пользователь нажал Да");
+                        const success = await hideEntry(selectedDate, initData); // Отправляем дату и initData
+                        if (success) {
+                            tg.HapticFeedback.notificationOccurred('success');
+                            // Обновляем данные и календарь после "удаления"
+                            await loadDataForYear(currentYear, currentUserId, initData);
+                            renderCalendar(currentYear);
+                        } else {
+                            tg.HapticFeedback.notificationOccurred('error');
+                        }
+                    } else {
+                        console.log("Пользователь нажал Нет");
+                    }
+                });
+                tg.HapticFeedback.impactOccurred("soft");
+             } else {
+                tg.showAlert("Редактировать можно только записи текущего года.");
+             }
+        };
+
         const handlePrevYear = async () => {
             if (isLoading) return;
             const minYear = availableYearsData.length > 0 ? Math.min(...availableYearsData) : currentYear -1; // Определяем минимальный год
@@ -1003,7 +1094,8 @@ const renderCalendar = (year) => {
             viewCryingCheckbox.checked = Boolean(Number(dayData.crying));
             viewWomanDayCheckbox.checked = Boolean(Number(dayData.WomanDay));
 
-            editDayBtn.style.display = (year === ACTUAL_CURRENT_YEAR) ? 'inline-block' : 'none';
+            try{editDayBtn.style.display = (year === ACTUAL_CURRENT_YEAR) ? 'inline-block' : 'none';}catch{}
+            try{removeDayBtn.style.display = (year === ACTUAL_CURRENT_YEAR) ? 'inline-block' : 'none';}catch{}
             viewPopup.classList.add('popup--visible');
         };
         const hideViewPopup = () => viewPopup.classList.remove('popup--visible');
@@ -1127,6 +1219,7 @@ const renderCalendar = (year) => {
              closeViewPopupBtn.addEventListener('click', hideViewPopup);
              cancelViewBtn.addEventListener('click', hideViewPopup);
              editDayBtn.addEventListener('click', handleEditFromView);
+             removeDayBtn.addEventListener('click', handleRemoveFromView);
              prevYearBtn.addEventListener('click', handlePrevYear);
              nextYearBtn.addEventListener('click', handleNextYear);
              shareButton.addEventListener('click', handleShare);
