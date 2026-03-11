@@ -753,11 +753,11 @@ switch ($method) {
                 try {
                     include_once("telegram.php");
                     $telegram = new TelegramBot($bot_token);
-                    $sendResult = $telegram->sendPhoto($input['user_id'], $result['url']);
-                    $sendResult = $telegram->sendMessage($input['user_id'], "Ваше изображение календаря готово!");
+                    $sendResult = $telegram->sendPhoto($input['user_id'], new CURLFile(dirname(__FILE__) . str_replace('https://bot.fhnb.ru/pixels/api/', '/', $result['url'])), "Ваше изображение календаря готово!", array('parse_mode' => 'HTML'));
                     $result['telegram_sent'] = ['success' => true, 'result' => $sendResult];
                 } catch (Exception $e) {
                     error_log("Ошибка отправки изображения: " . $e->getMessage());
+                    $sendResult = $telegram->sendMessage($input['user_id'], "Ваше изображение календаря <a href='" . $result['url'] . "'>готово</a>!", array('parse_mode' => 'HTML'));
                     $result['telegram_sent'] = ['success' => false, 'error' => $e->getMessage()];
                 }
             }

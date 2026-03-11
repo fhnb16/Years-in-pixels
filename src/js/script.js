@@ -439,6 +439,21 @@ const sendImageToBackend = async (blob, userId, initData) => {
 
         if (result.success) {
             console.log('Изображение успешно отправлено на бэкенд.');
+            //console.log("Проверка:", result.url, result.filename);
+            /*tg.downloadFile(result.url, result.filename, (success, error) => {
+                if (success) {
+                    console.log('Download initiated successfully');
+                    // You can show a confirmation message to the user
+                    Telegram.WebApp.showAlert(`Downloading: ${result.filename}`);
+                } else {
+                    console.error('Download failed:', error);
+                    // Handle the error, e.g., show an alert
+                    Telegram.WebApp.showAlert(`Download failed: ${error}`);
+                    
+                    // As a fallback, you could use a standard HTML download if the native method fails
+                    // fallbackDownload(fileUrl, fileName);
+                }
+            });*/
             tg.showAlert('Скриншот отправлен! Бот пришлет его вам в чат.');
         } else {
             const errorMsg = `Ошибка API: ${result.message || 'Неизвестная ошибка при отправке изображения.'}`;

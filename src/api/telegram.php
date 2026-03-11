@@ -17,10 +17,15 @@ class TelegramBot {
     /**
      * Отправка изображения пользователю
      */
-    public function sendPhoto($userId, $photoUrl, $caption = null, $options = []) {
+    public function sendPhoto($userId, $photo, $caption = null, $options = []) {
+        // Если передан путь к локальному файлу, оборачиваем в CURLFile
+        if (file_exists($photo)) {
+            $photo = new CURLFile(realpath($photo));
+        }
+
         $params = array_merge([
             'chat_id' => $userId,
-            'photo' => $photoUrl,
+            'photo' => $photo,
             'caption' => $caption
         ], $options);
         
@@ -45,7 +50,7 @@ class TelegramBot {
     public function sendPhotoWithButtons($userId, $photoUrl, $caption = null, $inlineKeyboard = [], $options = []) {
         $params = array_merge([
             'chat_id' => $userId,
-            'photo' => $photoUrl,
+            'photo' => $photoUrl . "?rnd=" . time(),
             'caption' => $caption,
             'reply_markup' => json_encode(['inline_keyboard' => $inlineKeyboard])
         ], $options);
@@ -80,44 +85,63 @@ class TelegramBot {
     }
     
     /**
+     * Отправка документа альтернативная через мультипарт через курл
+     */
+    public function sendDocumentMultipart($userId, $documentUrl) {
+        $params = array_merge([
+            'chat_id' => $userId,
+            'document' => str_replace('https://bot.fhnb.ru/pixels/api/', './', $documentUrl)
+        ]);
+        
+        return $this->makeRequest('sendDocument', $params);
+    }
+    
+    /**
      * Универсальный метод для выполнения запросов к Telegram API
      */
-    public function makeRequest($method, $params = []) {
-        $url = $this->apiUrl . '/' . $method;
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        
-        if ($response === false) {
-            throw new Exception("Ошибка cURL: " . $error);
-        }
-        
-        if ($httpCode !== 200) {
-            throw new Exception("Telegram API вернул код ошибки: " . $httpCode);
-        }
-        
-        $result = json_decode($response, true);
-        
-        if (!$result) {
-            throw new Exception("Невозможно распарсить ответ от Telegram API");
-        }
-        
-        if (!$result['ok']) {
-            throw new Exception("Telegram API ошибка: " . ($result['description'] ?? 'Неизвестная ошибка'));
-        }
-        
-        return $result;
+public function makeRequest($method, $params = []) {
+    $url = $this->apiUrl . '/' . $method;
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    
+    // ВАЖНО: Для отправки файлов (CURLFile) передаем массив КАК ЕСТЬ.
+    // PHP сам выставит Content-Type: multipart/form-data
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
+    
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+    // Для дебага: CURLFile нельзя красиво залогировать через json_encode,
+    // он превращается в тыкву {}. Поэтому логируем только если это не файл.
+    $debugParams = array_map(function($item) {
+        return ($item instanceof CURLFile) ? "[Local File: {$item->getFilename()}]" : $item;
+    }, $params);
+    
+    error_log("=== TG DEBUG ===");
+    error_log("Method: " . $method);
+    error_log("Params: " . json_encode($debugParams, JSON_UNESCAPED_UNICODE));
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    
+    if ($response === false) {
+        throw new Exception("Ошибка cURL: " . $error);
     }
+    
+    $result = json_decode($response, true);
+    
+    if ($httpCode !== 200 || (isset($result['ok']) && !$result['ok'])) {
+        $description = $result['description'] ?? 'Unknown error';
+        error_log("=== TG ERROR ===\nCode: $httpCode\nResponse: $response");
+        throw new Exception("Telegram API error: " . $description);
+    }
+    
+    return $result;
+}
     
     /**
      * Получение информации о боте
