@@ -6,7 +6,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Год в пикселях</title>
     <link rel="stylesheet" href="css/style.css?16">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--<script src="https://telegram.org/js/telegram-web-app.js"></script>/-->
+    <script src="js/telegram-web-app.js"></script>
+    <script>
+        (function() {
+            const CDN_URL = 'https://telegram.org/js/telegram-web-app.js';
+            const LOCAL_URL = 'js/telegram-web-app.js'; // Путь к вашему локальному файлу
+
+            function loadScript(src, callback) {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = callback;
+                script.onerror = () => {
+                    console.warn('CDN недоступен, остаёмся на локальной копии telegram-web-app.js');
+                    // Если CDN не грузится, пробуем локальный
+                    /*const fallback = document.createElement('script');
+                    fallback.src = LOCAL_URL;
+                    fallback.onload = callback;
+                    fallback.onerror = () => console.error('Не удалось загрузить Telegram Web App script');
+                    document.head.appendChild(fallback);*/
+                };
+                document.head.appendChild(script);
+            }
+
+            // Запускаем загрузку
+            loadScript(CDN_URL, () => {
+                console.log('Telegram Web App script loaded');
+                // Здесь можно инициировать логику, зависящую от WebApp
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.ready();
+                }
+            });
+        })();
+    </script>
+
 </head>
 
 <body data-theme="light" class="app--layout-full">

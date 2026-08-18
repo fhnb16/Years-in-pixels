@@ -8,10 +8,18 @@ include_once("config.php");
 class TelegramBot {
     private $botToken;
     private $apiUrl;
+    private $proxyConfig;
+    private $connectTimeout;
+    private $totalTimeout;
+    private $dohUrl;
     
-    public function __construct($botToken = null) {
+    public function __construct($botToken = null, $proxyConfig = null, $connectTimeout = null, $totalTimeout = null, $dohUrl = null) {
         $this->botToken = $botToken ?: $GLOBALS['bot_token'] ?? null;
         $this->apiUrl = "https://api.telegram.org/bot{$this->botToken}";
+        $this->proxyConfig = $proxyConfig ?: $GLOBALS['proxyConfig'] ?? null;
+        $this->connectTimeout = $connectTimeout ?: $GLOBALS['connectTimeout'] ?? null;
+        $this->totalTimeout = $totalTimeout ?: $GLOBALS['totalTimeout'] ?? null;
+        $this->dohUrl = $dohUrl ?: $GLOBALS['dohUrl'] ?? null;
     }
     
     /**
@@ -26,6 +34,19 @@ class TelegramBot {
         $params = array_merge([
             'chat_id' => $userId,
             'photo' => $photo,
+            'caption' => $caption
+        ], $options);
+        
+        return $this->makeRequest('sendPhoto', $params);
+    }
+
+    /**
+     * Отправка изображения пользователю по url
+     */
+    public function sendPhotoUrl($userId, $photoUrl, $caption = null, $options = []) {
+        $params = array_merge([
+            'chat_id' => $userId,
+            'photo' => $photoUrl,
             'caption' => $caption
         ], $options);
         
@@ -99,37 +120,78 @@ class TelegramBot {
     /**
      * Универсальный метод для выполнения запросов к Telegram API
      */
-public function makeRequest($method, $params = []) {
+public function makeRequest($method, $params = [], $useProxy = false) {
     $url = $this->apiUrl . '/' . $method;
     
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_POST, true);
+    // Базовые опции cURL
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $params,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => $this->totalTimeout,
+        CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
+        CURLOPT_NOSIGNAL => true,
+        
+        // DNS over HTTPS (cURL >= 7.62.0 + libcurl с поддержкой DoH)
+        CURLOPT_DOH_URL => $this->dohUrl,
+        
+        // Обходим блокировки: игнорируем резолв через системный DNS
+        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4, // иногда помогает при блокировках по IPv6
+        
+        // Заголовки (опционально, но полезно)
+        CURLOPT_HTTPHEADER => [
+            'Expect:', // убираем Expect: 100-continue для совместимости
+        ],
+    ]);
     
-    // ВАЖНО: Для отправки файлов (CURLFile) передаем массив КАК ЕСТЬ.
-    // PHP сам выставит Content-Type: multipart/form-data
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
+    // Если используем прокси — добавляем настройки
+    if ($useProxy) {
+        curl_setopt_array($ch, [
+            CURLOPT_PROXY => $this->proxyConfig['host'] . ':' . $this->proxyConfig['port'],
+            CURLOPT_PROXYTYPE => CURLPROXY_SOCKS5_HOSTNAME, // SOCKS5 с резолвом на стороне прокси
+            CURLOPT_PROXYUSERPWD => $this->proxyConfig['user'] . ':' . $this->proxyConfig['pass'],
+            
+            // Важно: не резолвить хост локально при использовании прокси
+            CURLOPT_PROXY_TRANSFER_MODE => true,
+        ]);
+    }
     
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-    // Для дебага: CURLFile нельзя красиво залогировать через json_encode,
-    // он превращается в тыкву {}. Поэтому логируем только если это не файл.
+    // Дебаг-логирование
     $debugParams = array_map(function($item) {
         return ($item instanceof CURLFile) ? "[Local File: {$item->getFilename()}]" : $item;
     }, $params);
     
     error_log("=== TG DEBUG ===");
     error_log("Method: " . $method);
+    error_log("Proxy: " . ($useProxy ? "YES" : "NO"));
     error_log("Params: " . json_encode($debugParams, JSON_UNESCAPED_UNICODE));
     
+    // Выполняем запрос
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
+    $curlError = curl_error($ch);
+    $curlErrno = curl_errno($ch);
     curl_close($ch);
     
+    // Логика повторного вызова: если таймаут подключения или ошибка резолва — пробуем через прокси
+    $retryErrors = [
+        CURLE_OPERATION_TIMEOUTED, // таймаут
+        CURLE_COULDNT_CONNECT,     // не удалось подключиться
+        CURLE_COULDNT_RESOLVE_HOST,// не резолвится хост
+        CURLE_RECV_ERROR,          // обрыв соединения (часто при блокировках)
+    ];
+    
+    if (!$useProxy && in_array($curlErrno, $retryErrors) && ($response === false || empty($result) || !isset($result['ok']))) {
+        error_log("=== TG RETRY === Перепробуем через SOCKS5 proxy (ошибка: $curlError, код: $curlErrno)");
+        // Рекурсивный вызов с флагом прокси
+        return $this->makeRequest($method, $params, true);
+    }
+    
+    // Обработка ошибок
     if ($response === false) {
-        throw new Exception("Ошибка cURL: " . $error);
+        throw new Exception("Ошибка cURL: " . $curlError . " (errno: $curlErrno)");
     }
     
     $result = json_decode($response, true);
