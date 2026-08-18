@@ -339,7 +339,11 @@ function settings_spec(): array
             'socks2_user' => ['Логин', 'text', '', ''],
             'socks2_pass' => ['Пароль', 'password', '', ''],
         ],
-        'Входящие вебхуки' => [
+        'Входящие: вебхук и файлы' => [
+            'pub_base' => ['Публичный адрес файлов', 'text', '',
+                'База, по которой Telegram скачивает картинки календаря — обычно инбаунд-реле, а не ваш сервер. '
+                . 'Указывайте адрес каталога api, например https://files.example.workers.dev/pixels/api. '
+                . 'Пусто — берётся адрес самого сервера, и если Telegram до него не достаёт, отправка уйдёт в загрузку файлом.'],
             'wh_url' => ['Адрес для setWebhook', 'text', '',
                 'Что увидит Telegram. Обычно это эндпоинт реле Cloudflare, а не ваш сервер напрямую.'],
             'wh_secret' => ['Секрет вебхука', 'password', '',
@@ -363,6 +367,24 @@ function settings_defaults(): array
         foreach ($fields as $k => $f) $out[$k] = $f[2];
     }
     return $out;
+}
+
+/**
+ * Публичный адрес файла в каталоге api — по нему Telegram скачивает картинку сам.
+ * Если задан pub_base (инбаунд-реле), ссылка идёт через него: до самого сервера
+ * Telegram может не доставать.
+ *
+ * @param string $rel путь относительно каталога api, например 'user_screens/x.png'
+ */
+function public_url(string $rel): string
+{
+    $rel  = ltrim($rel, '/');
+    $base = rtrim((string)Settings::get('pub_base', ''), '/');
+    if ($base !== '') return "$base/$rel";
+
+    $scheme = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+    $dir    = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/');
+    return $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir . '/' . $rel;
 }
 
 // ------------------------------------------------- подпись Telegram WebApp

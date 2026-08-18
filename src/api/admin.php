@@ -305,6 +305,88 @@ function admin_action(string $a, array $in): array
             ]];
         }
 
+        // --- достанет ли Telegram картинку по ссылке
+        case 'filecheck': {
+            $dir = __DIR__ . '/user_screens';
+            if (!is_dir($dir)) @mkdir($dir, 0755, true);
+            $name  = 'probe_' . bin2hex(random_bytes(6)) . '.png';
+            $probe = $dir . '/' . $name;
+            // 1×1 PNG: проверяем доступность каталога снаружи, а не картинку саму по себе
+            if (@file_put_contents($probe, base64_decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')) === false) {
+                return ['ok' => true, 'check' => ['name' => 'Файлы доступны снаружи', 'status' => 'err',
+                    'detail' => 'не удалось записать пробный файл в user_screens',
+                    'hint'   => 'Дайте каталогу права на запись — иначе картинки календарей не сохранятся вовсе.']];
+            }
+
+            $url = public_url('user_screens/' . $name);
+            $t0  = microtime(true);
+            $ch  = curl_init($url);
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 12, CURLOPT_CONNECTTIMEOUT => 6]);
+            $body = curl_exec($ch);
+            $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $type = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            $err  = curl_error($ch);
+            curl_close($ch);
+            @unlink($probe);
+
+            $ms       = (int)round((microtime(true) - $t0) * 1000);
+            $png      = is_string($body) && strncmp($body, "\x89PNG", 4) === 0;
+            $viaRelay = Settings::get('pub_base', '') !== '';
+
+            if ($png && $http === 200) {
+                $status = 'ok';
+                $detail = "$url — 200, $type, $ms мс" . ($viaRelay ? ', через реле' : ', напрямую с сервера');
+                $hint   = $viaRelay ? '' : 'Ссылка ведёт на сам сервер. Если Telegram до него не достаёт, отправка каждый раз будет уходить в загрузку файлом — заполните «Публичный адрес файлов».';
+            } else {
+                $status = 'err';
+                $detail = $body === false ? "$url — не ответил: $err"
+                        : "$url — HTTP $http, " . ($type ?: 'без типа') . ', ' . strlen((string)$body) . ' байт';
+                $hint   = 'Telegram скачивает картинку ровно по этой ссылке. Проверьте, что реле проксирует каталог user_screens, а не только вебхук.';
+            }
+            Log::info('admin', 'Проверка доступности файлов', ['url' => $url, 'http' => $http, 'успех' => $status === 'ok']);
+            return ['ok' => true, 'check' => ['name' => 'Файлы доступны снаружи', 'status' => $status, 'detail' => $detail, 'hint' => $hint]];
+        }
+
+        // --- сквозная проверка: та же цепочка, которой картинка уходит пользователю
+        case 'testphoto': {
+            $uid = (int)($_SESSION['admin']['uid'] ?? 0) ?: (int)($GLOBALS['admin_ids'][0] ?? 0);
+            if (!$uid) return ['ok' => false, 'message' => 'Некому слать: войдите через Telegram или добавьте свой ID в «Настройки → Доступ»'];
+
+            $dir = __DIR__ . '/user_screens';
+            if (!is_dir($dir)) @mkdir($dir, 0755, true);
+            $name = 'test_' . bin2hex(random_bytes(6)) . '.png';
+            $path = $dir . '/' . $name;
+
+            if (function_exists('imagecreatetruecolor')) {
+                $im = imagecreatetruecolor(320, 160);
+                imagefilledrectangle($im, 0, 0, 320, 160, imagecolorallocate($im, 29, 209, 161));
+                imagestring($im, 5, 20, 70, 'Years in pixels: test', imagecolorallocate($im, 255, 255, 255));
+                imagepng($im, $path);
+                imagedestroy($im);
+            } else {
+                @file_put_contents($path, base64_decode(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+            }
+
+            $r = (new TelegramBot())->sendPhotoBestEffort($uid, $path, public_url('user_screens/' . $name),
+                'Тестовая картинка из панели');
+            @unlink($path);
+
+            $said = ['url' => 'Доставлено ссылкой — Telegram скачал файл сам',
+                     'upload' => 'Доставлено загрузкой файла',
+                     'link'   => 'Картинка не прошла, отправлена ссылка текстом'];
+            return ['ok' => true, 'check' => [
+                'name'   => 'Отправка картинки себе',
+                'status' => $r['ok'] ? ($r['via'] === 'url' ? 'ok' : 'warn') : 'err',
+                'detail' => ($r['ok'] ? ($said[$r['via']] ?? $r['via']) : 'Не доставлено')
+                          . ($r['tries'] ? ' · не сработало: ' . implode(' | ', $r['tries']) : ''),
+                'hint'   => $r['via'] === 'upload'
+                    ? 'Работает, но каждый раз тащит файл через ваш канал наружу. Ссылка дешевле — почините отдачу user_screens через реле.'
+                    : ($r['via'] === 'link' ? 'Ни ссылка, ни загрузка не прошли — причина каждой попытки во вкладке «Журнал».' : ''),
+            ]];
+        }
+
         // --- окружение и права
         case 'env': {
             $checks = [];
@@ -333,7 +415,7 @@ function admin_action(string $a, array $in): array
                 'detail' => $canCfg ? 'да' : 'нет, файл только на чтение',
                 'hint'   => $canCfg ? '' : 'Смена пароля и списка админов покажет готовый текст файла для ручной замены.'];
 
-            foreach ([Log::dir() => 'Каталог журнала', __DIR__ . '/uploads' => 'Каталог изображений'] as $dir => $name) {
+            foreach ([Log::dir() => 'Каталог журнала', __DIR__ . '/user_screens' => 'Каталог картинок'] as $dir => $name) {
                 $checks[] = ['name' => $name, 'status' => is_dir($dir) && is_writable($dir) ? 'ok' : 'err',
                     'detail' => is_dir($dir) ? ($dir . (is_writable($dir) ? ' — доступен на запись' : ' — только чтение')) : 'не существует',
                     'hint'   => is_dir($dir) && is_writable($dir) ? '' : 'Создайте каталог и дайте права на запись, иначе журнал и картинки молча теряются.'];
@@ -748,7 +830,7 @@ document.getElementById('tgLogin').onclick = () => {
     </div>
 
     <div class="card">
-      <div class="card__title">Вебхук</div>
+      <div class="card__title">Входящие: вебхук</div>
       <p class="card__hint">Telegram сам проверяет адрес при установке — это может занять до двух минут.</p>
       <div id="whChecks"></div>
       <div class="btns">
@@ -756,6 +838,18 @@ document.getElementById('tgLogin').onclick = () => {
         <button class="btn" id="inbound">Проверить наш эндпоинт</button>
         <button class="btn btn--main" data-wh="set">Установить из настроек</button>
         <button class="btn btn--danger" data-wh="del">Снять вебхук</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__title">Входящие: картинки календарей</div>
+      <p class="card__hint">Картинка уходит пользователю ссылкой — Telegram скачивает файл сам через инбаунд-реле.
+        Не вышло — тот же файл отправляется загрузкой, и только если и это не прошло, человек получает ссылку текстом.
+        Первая проверка кладёт в user_screens пробный файл и пробует забрать его снаружи, вторая гоняет всю цепочку целиком и шлёт картинку вам в Telegram.</p>
+      <div id="fileChecks"></div>
+      <div class="btns">
+        <button class="btn btn--main" id="fileCheck">Проверить доступность файлов</button>
+        <button class="btn" id="testPhoto">Отправить тестовую картинку себе</button>
       </div>
     </div>
 
@@ -986,6 +1080,19 @@ document.getElementById('inbound').onclick = async () => {
   renderChecks(whBox, [{name:'Наш эндпоинт за реле', status:'wait', detail:'Стучимся…', hint:''}], true);
   const j = await api('inbound', {});
   if (j.check) renderChecks(whBox, [j.check], true); else toast(j.message || 'Не вышло', 'err');
+};
+
+// --- картинки календарей
+const fileBox = document.getElementById('fileChecks');
+document.getElementById('fileCheck').onclick = async () => {
+  renderChecks(fileBox, [{name:'Файлы доступны снаружи', status:'wait', detail:'Кладём пробный файл и пробуем забрать его снаружи…'}], true);
+  const j = await api('filecheck', {});
+  if (j.check) renderChecks(fileBox, [j.check], true); else toast(j.message || 'Не вышло', 'err');
+};
+document.getElementById('testPhoto').onclick = async () => {
+  renderChecks(fileBox, [{name:'Отправка картинки себе', status:'wait', detail:'Пробуем ссылкой, потом загрузкой — до минуты…'}], true);
+  const j = await api('testphoto', {});
+  if (j.check) renderChecks(fileBox, [j.check], true); else toast(j.message || 'Не вышло', 'err');
 };
 
 // --- окружение и схема

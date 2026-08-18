@@ -164,7 +164,7 @@ function setup_run(): array
     $add('Настройки', $seeded ? 'added' : 'ok', $seeded ? "добавлено ключей: $seeded" : 'все ключи на месте');
 
     // Каталоги, в которые пишет приложение.
-    foreach ([Log::dir() => 'журнал', __DIR__ . '/uploads' => 'изображения'] as $dir => $what) {
+    foreach ([Log::dir() => 'журнал', __DIR__ . '/user_screens' => 'картинки календарей'] as $dir => $what) {
         if (!is_dir($dir)) @mkdir($dir, 0750, true);
         $add("Каталог $what", is_writable($dir) ? 'ok' : 'err',
             is_writable($dir) ? $dir : "$dir недоступен на запись — проверьте права");

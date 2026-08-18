@@ -96,19 +96,9 @@ function saveUserImage($pdo, $botToken, $input) {
             throw new Exception('Ошибка сохранения файла');
         }
 
-        // Генерируем публичный URL
-        // Определяем базовый URL сайта
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'];
-        $baseUrl = $protocol . '://' . $host;
-        
-        // Получаем путь к скрипту относительно корня сайта
-        $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
-        if ($scriptPath === '/') {
-            $scriptPath = '';
-        }
-        
-        $publicUrl = $baseUrl . $scriptPath . '/user_screens/' . $filename;
+        // Публичный адрес: через инбаунд-реле, если оно задано в настройках, иначе адрес самого сервера.
+        // По этой ссылке картинку скачивает сам Telegram, поэтому она должна быть доступна снаружи.
+        $publicUrl = public_url('user_screens/' . $filename);
 
         // Обновляем запись в базе данных
         $stmt = $pdo->prepare("UPDATE calendar_users SET user_shareimage = :share_image WHERE user_id = :user_id");
@@ -125,6 +115,7 @@ function saveUserImage($pdo, $botToken, $input) {
             'success' => true,
             'message' => 'Изображение успешно сохранено',
             'url' => $publicUrl,
+            'path' => $filepath,
             'filename' => $filename
         ];
 
@@ -137,64 +128,6 @@ function saveUserImage($pdo, $botToken, $input) {
     }
 }
 
-
-/**
- * Отправка изображения пользователю через Telegram
- */
-function sendImageToUser($pdo, $botToken, $input, $caption = null) {
-    // Валидация входных данных
-    if (!$input || !isset($input['user_id'], $input['image_url'], $_SERVER['HTTP_AUTHORIZATION'])) {
-        throw new Exception('Неполные данные. Требуются user_id и image_url.');
-    }
-
-    $userId = filter_var($input['user_id'], FILTER_VALIDATE_INT);
-    $imageUrl = $input['image_url'];
-    $initData = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    $caption = $input['caption'] ?? 'Ваше изображение календаря';
-
-    if ($userId === false || $userId <= 0) {
-        throw new Exception('Некорректный user_id');
-    }
-
-    if (empty($imageUrl)) {
-        throw new Exception('Не указан URL изображения');
-    }
-
-    // Проверка hash
-    if (!checkHash($initData, $botToken)) {
-        throw new Exception('Неверный hash initData');
-    }
-
-    try {
-        // Подключаем Telegram API
-        require_once __DIR__ . '/telegram.php';
-        
-        $telegram = new TelegramBot($botToken);
-        $result = $telegram->sendPhoto($userId, $imageUrl, $caption);
-        
-        // Логируем успешную отправку
-        $logStmt = $pdo->prepare("INSERT INTO calendar_users_log (user_id, action, details, created_at) VALUES (:user_id, :action, :details, NOW())");
-        try {
-            $logStmt->execute([
-                'user_id' => $userId,
-                'action' => 'image_sent',
-                'details' => json_encode(['image_url' => $imageUrl, 'caption' => $caption])
-            ]);
-        } catch (Exception $e) {
-            // Игнорируем ошибки логирования
-        }
-        
-        return [
-            'success' => true,
-            'message' => 'Изображение успешно отправлено',
-            'telegram_result' => $result
-        ];
-
-    } catch (Exception $e) {
-        Log::warn('tg', (string)("Ошибка отправки изображения пользователю {$userId}: " . $e->getMessage()));
-        throw $e;
-    }
-}
 
 /**
  * Получает геолокацию пользователя по IP и обновляет мета-информацию
@@ -691,21 +624,20 @@ switch ($method) {
         try {
             $result = saveUserImage($pdo, $bot_token, $input);
             if ($result['success'] && isset($result['url'])) {
-                try {
-                    require_once __DIR__ . '/telegram.php';
-                    $telegram = new TelegramBot($bot_token);
-                    $sendResult = $telegram->sendPhoto($input['user_id'], new CURLFile(dirname(__FILE__) . str_replace('https://bot.fhnb.ru/pixels/api/', '/', $result['url'])), "Ваше изображение календаря готово!", array('parse_mode' => 'HTML'));
-                    //$sendResult = $telegram->sendPhotoUrl($input['user_id'], $result['url'], "Ваше изображение календаря готово!", array('parse_mode' => 'HTML'));
-                    $result['telegram_sent'] = ['success' => true, 'result' => $sendResult];
-                } catch (Exception $e) {
-                    Log::warn('tg', (string)("Ошибка отправки изображения: " . $e->getMessage()));
-                    $sendResult = $telegram->sendMessage($input['user_id'], "Ваше изображение календаря <a href='" . $result['url'] . "'>готово</a>!", array('parse_mode' => 'HTML'));
-                    $result['telegram_sent'] = ['success' => false, 'error' => $e->getMessage()];
-                }
+                require_once __DIR__ . '/telegram.php';
+                $delivery = (new TelegramBot($bot_token))->sendPhotoBestEffort(
+                    $input['user_id'],
+                    $result['path'] ?? '',
+                    $result['url'],
+                    'Ваше изображение календаря готово!',
+                    ['parse_mode' => 'HTML']
+                );
+                $result['telegram_sent'] = $delivery;
             }
             echo json_encode($result);
         } catch (Exception $e) {
             http_response_code(400);
+            Log::warn('tg', 'Сохранение и отправка картинки не удались', ['ошибка' => $e->getMessage()]);
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;

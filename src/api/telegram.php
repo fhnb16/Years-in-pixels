@@ -188,6 +188,67 @@ class TelegramBot
             ['chat_id' => $userId, 'photo' => $photo, 'caption' => $caption], $options));
     }
 
+    /**
+     * Три попытки доставить картинку, от дешёвой к дорогой:
+     *   1. ссылкой — Telegram скачивает файл сам через инбаунд-реле, наш канал наружу почти не нагружен;
+     *   2. загрузкой — файл уходит телом запроса, работает даже когда наш адрес снаружи недоступен,
+     *      но тащит несколько мегабайт через тот же канал, что и обычные вызовы;
+     *   3. текстом со ссылкой — чтобы человек хотя бы забрал картинку руками.
+     *
+     * @return array{ok:bool,via:string,message:string,tries:array}
+     */
+    public function sendPhotoBestEffort($userId, string $localPath, string $publicUrl, ?string $caption = null, array $options = []): array
+    {
+        $tries = [];
+
+        if ($publicUrl !== '') {
+            try {
+                $this->makeRequest('sendPhoto', array_merge(
+                    ['chat_id' => $userId, 'photo' => $publicUrl, 'caption' => $caption], $options));
+                Log::info('tg', 'Картинка отправлена ссылкой', ['user_id' => $userId, 'url' => $publicUrl]);
+                return ['ok' => true, 'via' => 'url', 'message' => 'отправлено ссылкой', 'tries' => $tries];
+            } catch (Exception $e) {
+                $tries[] = 'ссылкой: ' . $e->getMessage();
+                // Самая частая причина — Telegram не смог скачать файл, то есть инбаунд-реле не отдаёт uploads.
+                Log::warn('tg', 'Не вышло отправить картинку ссылкой, пробуем загрузкой', [
+                    'user_id' => $userId, 'url' => $publicUrl, 'причина' => $e->getMessage(),
+                ]);
+            }
+        } else {
+            $tries[] = 'ссылкой: публичный адрес файлов не задан';
+        }
+
+        if (is_file($localPath)) {
+            try {
+                $this->makeRequest('sendPhoto', array_merge(
+                    ['chat_id' => $userId, 'photo' => new CURLFile(realpath($localPath)), 'caption' => $caption], $options));
+                Log::info('tg', 'Картинка отправлена загрузкой файла', [
+                    'user_id' => $userId, 'кб' => (int)round(filesize($localPath) / 1024),
+                ]);
+                return ['ok' => true, 'via' => 'upload', 'message' => 'отправлено загрузкой файла', 'tries' => $tries];
+            } catch (Exception $e) {
+                $tries[] = 'загрузкой: ' . $e->getMessage();
+                Log::warn('tg', 'Не вышло отправить картинку загрузкой', ['user_id' => $userId, 'причина' => $e->getMessage()]);
+            }
+        } else {
+            $tries[] = 'загрузкой: файла нет на диске (' . $localPath . ')';
+        }
+
+        if ($publicUrl !== '') {
+            try {
+                $this->sendMessage($userId, 'Ваше изображение календаря <a href="' . htmlspecialchars($publicUrl, ENT_QUOTES, 'UTF-8') . '">готово</a>!',
+                    ['parse_mode' => 'HTML']);
+                Log::warn('tg', 'Картинка не ушла, отправили ссылку текстом', ['user_id' => $userId, 'попытки' => $tries]);
+                return ['ok' => true, 'via' => 'link', 'message' => 'картинка не прошла, отправлена ссылка текстом', 'tries' => $tries];
+            } catch (Exception $e) {
+                $tries[] = 'текстом: ' . $e->getMessage();
+            }
+        }
+
+        Log::error('tg', 'Картинку доставить не удалось ничем', ['user_id' => $userId, 'попытки' => $tries]);
+        return ['ok' => false, 'via' => '', 'message' => 'ни один способ не сработал', 'tries' => $tries];
+    }
+
     public function sendPhotoUrl($userId, $photoUrl, $caption = null, $options = [])
     {
         return $this->makeRequest('sendPhoto', array_merge(
