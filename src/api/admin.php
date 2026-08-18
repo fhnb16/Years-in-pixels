@@ -18,6 +18,147 @@ $a = $_GET['a'] ?? '';
 function jout($x) { header('Content-Type: application/json; charset=utf-8'); echo json_encode($x, JSON_UNESCAPED_UNICODE); exit; }
 function jin(): array { $d = json_decode(file_get_contents('php://input'), true); return is_array($d) ? $d : []; }
 
+// -------------------------------------------------------------- установка
+
+$installMode = !app_installed();
+
+if ($installMode && strpos($a, 'inst_') === 0) {
+    if (!admin_check_csrf()) jout(['ok' => false, 'message' => 'Сессия устарела, обновите страницу']);
+    if ($a !== 'inst_save') session_write_close();     // сетевые проверки не должны держать блокировку сессии
+    try {
+        jout(installer_action($a, jin()));
+    } catch (Throwable $e) {
+        Log::error('admin', 'Установщик упал', ['шаг' => $a, 'ошибка' => $e->getMessage()]);
+        jout(['ok' => false, 'message' => $e->getMessage()]);
+    }
+}
+
+function installer_action(string $a, array $in): array
+{
+    switch ($a) {
+
+        // Проверяем не только вход, но и право создавать таблицы: иначе установка «пройдёт»,
+        // а всё встанет на первом же CREATE TABLE.
+        case 'inst_db': {
+            $t0  = microtime(true);
+            $cur = config_current();
+            // Пустой пароль означает «оставить прежний»: в разметку он не выводится, вводить заново незачем.
+            $pass = ($in['db_pass'] ?? '') !== '' ? (string)$in['db_pass'] : $cur['db_pass'];
+            try {
+                $pdo = new PDO(
+                    'mysql:host=' . (string)($in['db_host'] ?? '') . ';dbname=' . (string)($in['db_name'] ?? '') . ';charset=utf8mb4',
+                    (string)($in['db_user'] ?? ''), $pass,
+                    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 6]
+                );
+            } catch (PDOException $e) {
+                $m = $e->getMessage();
+                $hint = strpos($m, 'to database') !== false || strpos($m, 'Unknown database') !== false
+                      ? 'База с таким именем либо не существует, либо этому пользователю не выдали на неё прав.'
+                      : (strpos($m, 'Access denied') !== false ? 'Пользователь или пароль не подошли.'
+                      : (strpos($m, '2002') !== false ? 'Сервер базы не отвечает по этому адресу. На шаред-хостинге это обычно localhost.' : ''));
+                return ['ok' => true, 'check' => ['name' => 'Подключение к базе', 'status' => 'err', 'detail' => $m, 'hint' => $hint]];
+            }
+            try {
+                $pdo->exec('CREATE TABLE IF NOT EXISTS yip_install_check (id INT)');
+                $pdo->exec('DROP TABLE IF EXISTS yip_install_check');
+            } catch (PDOException $e) {
+                return ['ok' => true, 'check' => ['name' => 'Подключение к базе', 'status' => 'err',
+                    'detail' => 'Вход есть, но таблицы создавать нельзя: ' . $e->getMessage(),
+                    'hint'   => 'Выдайте пользователю права CREATE и ALTER на эту базу.']];
+            }
+            $ms    = (int)round((microtime(true) - $t0) * 1000);
+            $found = [];
+            foreach (['calendar_users' => 'пользователей', 'calendar_entries' => 'записей'] as $t => $what) {
+                try {
+                    if ($pdo->query('SHOW TABLES LIKE ' . $pdo->quote($t))->fetchColumn()) {
+                        $found[] = $what . ': ' . (int)$pdo->query("SELECT COUNT(*) FROM `$t`")->fetchColumn();
+                    }
+                } catch (PDOException $e) { /* таблицы может не быть — это нормально */ }
+            }
+            return ['ok' => true, 'check' => ['name' => 'Подключение к базе', 'status' => 'ok',
+                'detail' => 'вход есть, таблицы создавать можно — ' . $ms . ' мс'
+                          . ($found ? '. Данные на месте — ' . implode(', ', $found) : '. База пустая, таблицы создадутся сами'),
+                'hint'   => $found ? 'Установщик только добавляет недостающее: существующие таблицы, столбцы и данные не трогаются.' : '']];
+        }
+
+        // Токен проверяем сразу двумя путями: напрямую и через реле, если адрес указан.
+        case 'inst_bot': {
+            $token = trim((string)($in['bot_token'] ?? '')) ?: config_current()['bot_token'];
+            $relay = trim((string)($in['relay'] ?? ''));
+            if ($token === '') return ['ok' => false, 'message' => 'Впишите токен бота'];
+
+            $checks = [];
+            foreach (array_filter([
+                ['direct', 'Напрямую', 'https://api.telegram.org'],
+                $relay !== '' ? ['worker', 'Через реле Cloudflare', $relay] : null,
+            ]) as [$ch, $name, $base]) {
+                $r = tg_attempt($ch, 'getMe', [], $token, $base);
+                $checks[] = ['name' => $name, 'status' => $r['ok'] ? 'ok' : 'err',
+                    'detail' => $r['ok'] ? '@' . ($r['data']['result']['username'] ?? '?') . ' — ' . $r['ms'] . ' мс' : $r['message'],
+                    'hint'   => $r['ok'] ? '' : tg_hint($r['reason'])];
+            }
+            if ($relay === '') {
+                $checks[] = ['name' => 'Реле Cloudflare', 'status' => 'warn', 'detail' => 'адрес не указан',
+                    'hint' => 'Если Telegram у вас блокируется, впишите адрес реле — установка без него пройдёт, но бот работать не будет.'];
+            }
+            return ['ok' => true, 'checks' => $checks];
+        }
+
+        case 'inst_save': {
+            $cur = config_current();
+            $ids = array_values(array_filter(array_map('intval', preg_split('/[^0-9]+/', (string)($in['admin_ids'] ?? '')))));
+            $pw  = (string)($in['password'] ?? '');
+            $pw2 = (string)($in['password2'] ?? '');
+
+            if ($pw !== '' && $pw !== $pw2)      return ['ok' => false, 'message' => 'Пароли не совпали'];
+            if ($pw !== '' && strlen($pw) < 8)   return ['ok' => false, 'message' => 'Пароль короче 8 символов'];
+            if ($pw === '' && !$ids)             return ['ok' => false, 'message' => 'Задайте пароль или хотя бы один Telegram ID — иначе в панель не войти'];
+
+            $origins = array_values(array_filter(array_map('trim', explode("\n", str_replace(',', "\n", (string)($in['origins'] ?? ''))))));
+
+            // Пустое поле = «оставить как было». Пароль базы и токен в разметку не выводятся,
+            // поэтому при обновлении их вводить заново не нужно.
+            $keep = fn(string $k, string $was) => trim((string)($in[$k] ?? '')) !== '' ? trim((string)$in[$k]) : $was;
+
+            [$ok, $msg, $text] = config_write([
+                'db_host' => $keep('db_host', $cur['db_host']),
+                'db_user' => $keep('db_user', $cur['db_user']),
+                'db_pass' => ($in['db_pass'] ?? '') !== '' ? (string)$in['db_pass'] : $cur['db_pass'],
+                'db_name' => $keep('db_name', $cur['db_name']),
+                'bot_token' => $keep('bot_token', $cur['bot_token']),
+                'admin_ids' => $ids,
+                'admin_password_hash' => $pw !== '' ? password_hash($pw, PASSWORD_DEFAULT) : $cur['admin_password_hash'],
+                'allowed_origins' => $origins ?: $cur['allowed_origins'],
+            ]);
+            if (!$ok) return ['ok' => false, 'message' => $msg, 'manual' => $text];
+
+            $report = setup_run();
+
+            // Адрес реле из установщика — сразу в настройки, первым каналом.
+            $relay = trim((string)($in['relay'] ?? ''));
+            if ($relay !== '') {
+                try {
+                    Settings::set('tg_worker_base', rtrim($relay, '/'));
+                    Settings::set('tg_order', 'worker,direct,socks,socks2');
+                } catch (Throwable $e) { /* схема могла не создаться — об этом уже сказано в отчёте */ }
+            }
+
+            // Сразу впускаем того, кто ставил: второй раз пароль вводить незачем.
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_regenerate_id(true);
+                $_SESSION['admin'] = ['via' => 'установщик', 'uid' => $ids[0] ?? null, 'name' => 'установщик', 'since' => time()];
+            }
+            Log::info('admin', 'Установка завершена', ['админов' => count($ids), 'пароль' => $pw !== '' ? 'задан' : 'не задан', 'реле' => $relay !== '']);
+
+            $map = ['ok' => 'ok', 'added' => 'ok', 'warn' => 'warn', 'err' => 'err'];
+            return ['ok' => true, 'message' => 'Установка завершена',
+                'checks' => array_map(fn($s) => ['name' => $s['what'], 'status' => $map[$s['status']] ?? 'warn',
+                    'detail' => ($s['status'] === 'added' ? '✚ ' : '') . $s['detail'], 'hint' => ''], $report['steps'])];
+        }
+    }
+    return ['ok' => false, 'message' => 'Неизвестный шаг установки'];
+}
+
 // ------------------------------------------------------------ вход/выход
 
 if ($a === 'login') {
@@ -65,6 +206,30 @@ function admin_action(string $a, array $in): array
             }
             Log::info('admin', 'Настройки сохранены', ['ключи' => $changed]);   // значения не пишем: среди них пароли
             return ['ok' => true, 'message' => $changed ? 'Сохранено: ' . count($changed) . ' шт.' : 'Изменений не было'];
+        }
+
+        // --- смена пароля, списка админов, токена: правит config.php, не базу
+        case 'access': {
+            $cur = config_current();
+            $pw  = (string)($in['password'] ?? '');
+            $pw2 = (string)($in['password2'] ?? '');
+            if ($pw !== '' && $pw !== $pw2)    return ['ok' => false, 'message' => 'Пароли не совпали'];
+            if ($pw !== '' && strlen($pw) < 8) return ['ok' => false, 'message' => 'Пароль короче 8 символов'];
+
+            $ids = array_values(array_filter(array_map('intval', preg_split('/[^0-9]+/', (string)($in['admin_ids'] ?? '')))));
+            $org = array_values(array_filter(array_map('trim', explode(',', (string)($in['origins'] ?? '')))));
+            $tok = trim((string)($in['bot_token'] ?? ''));
+            if ($pw === '' && !$ids)           return ['ok' => false, 'message' => 'Нельзя убрать сразу и пароль, и всех админов — в панель будет не войти'];
+
+            [$ok, $msg, $text] = config_write([
+                'db_host' => $cur['db_host'], 'db_user' => $cur['db_user'],
+                'db_pass' => $cur['db_pass'], 'db_name' => $cur['db_name'],
+                'bot_token' => $tok !== '' ? $tok : $cur['bot_token'],
+                'admin_ids' => $ids,
+                'admin_password_hash' => $pw !== '' ? password_hash($pw, PASSWORD_DEFAULT) : $cur['admin_password_hash'],
+                'allowed_origins' => $org ?: $cur['allowed_origins'],
+            ]);
+            return ['ok' => $ok, 'message' => $ok ? ($pw !== '' ? 'Пароль изменён' : $msg) : $msg, 'manual' => $ok ? null : $text];
         }
 
         // --- проверка одного канала до Bot API
@@ -154,6 +319,19 @@ function admin_action(string $a, array $in): array
             $checks[] = ['name' => 'Короткие теги PHP', 'status' => ini_get('short_open_tag') ? 'warn' : 'ok',
                 'detail' => ini_get('short_open_tag') ? 'включены' : 'выключены',
                 'hint'   => ini_get('short_open_tag') ? 'Не опасно, но код должен открываться через <?php в любом случае.' : ''];
+
+            $oc = function_exists('opcache_get_configuration') ? (opcache_get_configuration()['directives'] ?? []) : [];
+            if (!empty($oc['opcache.enable'])) {
+                $stale = isset($oc['opcache.validate_timestamps']) && !$oc['opcache.validate_timestamps'];
+                $checks[] = ['name' => 'opcache', 'status' => $stale ? 'warn' : 'ok',
+                    'detail' => $stale ? 'включён, проверка времени файлов выключена' : 'включён, файлы перечитываются',
+                    'hint'   => $stale ? 'Правки config.php (пароль, админы, токен) не подхватятся, пока не перезапустят PHP. Панель сбрасывает кэш сама, но при этой настройке сброс может не сработать.' : ''];
+            }
+
+            $canCfg = is_file(config_path()) ? is_writable(config_path()) : is_writable(__DIR__);
+            $checks[] = ['name' => 'config.php правится из панели', 'status' => $canCfg ? 'ok' : 'warn',
+                'detail' => $canCfg ? 'да' : 'нет, файл только на чтение',
+                'hint'   => $canCfg ? '' : 'Смена пароля и списка админов покажет готовый текст файла для ручной замены.'];
 
             foreach ([Log::dir() => 'Каталог журнала', __DIR__ . '/uploads' => 'Каталог изображений'] as $dir => $name) {
                 $checks[] = ['name' => $name, 'status' => is_dir($dir) && is_writable($dir) ? 'ok' : 'err',
@@ -375,6 +553,137 @@ tbody tr:hover{background:var(--panel-2)}
 <div class="busy" id="busy"><div class="spin"></div><div class="busy__txt" id="busyTxt"></div></div>
 <div class="toasts" id="toasts"></div>
 
+<?php if ($installMode):
+    Log::warn('admin', 'Открыт установщик', ['ip' => $_SERVER['REMOTE_ADDR'] ?? '?', 'режим' => install_mode()]);
+    $c  = config_current();
+    $up = install_mode() === 'upgrade';   // конфиг с доступами уже есть — не хватает только входа в панель
+?>
+<div class="wrap" style="max-width:620px">
+  <h1><?= $up ? 'Обновление' : 'Установка' ?></h1>
+  <?php if ($up): ?>
+    <div class="msg msg--ok">Конфиг найден, доступы к базе и токен на месте — заново вводить их не нужно.
+      Осталось задать вход в панель. Таблицы и данные не трогаются: установщик умеет только добавлять
+      недостающие таблицы и столбцы, удалять он не умеет вовсе.</div>
+  <?php endif; ?>
+  <div class="msg msg--warn">Пока пароль панели не задан, эта страница открыта любому, кто знает адрес.
+    Задайте пароль сразу.</div>
+
+  <?php /* Секреты в разметку не выводим: до задания пароля эта страница доступна без входа. */ ?>
+  <details class="card" <?= $up ? '' : 'open' ?>>
+    <summary class="card__title" style="cursor:pointer">База данных<?= $up ? ' — уже настроена' : '' ?></summary>
+    <p class="card__hint">Проверяется не только вход, но и право создавать таблицы — иначе установка «пройдёт», а всё встанет на первой же таблице.</p>
+    <div class="field"><label class="field__label" for="i_db_host">Хост</label>
+      <input id="i_db_host" data-i="db_host" type="text" value="<?= $h($c['db_host']) ?>"></div>
+    <div class="field"><label class="field__label" for="i_db_name">База</label>
+      <input id="i_db_name" data-i="db_name" type="text" value="<?= $h($c['db_name']) ?>"></div>
+    <div class="field"><label class="field__label" for="i_db_user">Пользователь</label>
+      <input id="i_db_user" data-i="db_user" type="text" value="<?= $h($c['db_user']) ?>"></div>
+    <div class="field"><label class="field__label" for="i_db_pass">Пароль</label>
+      <input id="i_db_pass" data-i="db_pass" type="password" autocomplete="new-password"
+             placeholder="<?= $c['db_pass'] !== '' ? 'задан — пустое поле оставит прежний' : '' ?>"></div>
+    <div id="dbChecks"></div>
+    <div class="btns"><button class="btn" id="dbTest">Проверить подключение</button></div>
+  </details>
+
+  <details class="card" <?= $up ? '' : 'open' ?>>
+    <summary class="card__title" style="cursor:pointer">Telegram<?= $up && $c['bot_token'] !== '' ? ' — токен уже задан' : '' ?></summary>
+    <p class="card__hint">Токен даёт @BotFather. Если Telegram у вас блокируется — впишите адрес реле Cloudflare, оно станет первым каналом связи.</p>
+    <div class="field"><label class="field__label" for="i_bot_token">Токен бота</label>
+      <input id="i_bot_token" data-i="bot_token" type="text" autocomplete="off"
+             placeholder="<?= $c['bot_token'] !== '' ? 'задан — пустое поле оставит прежний' : '000000000:AA...' ?>"></div>
+    <div class="field"><label class="field__label" for="i_relay">Адрес реле Cloudflare</label>
+      <input id="i_relay" data-i="relay" type="text" placeholder="https://tg.example.workers.dev">
+      <div class="field__hint">Без завершающего слэша. Можно оставить пустым и заполнить позже в настройках.</div></div>
+    <div id="botChecks"></div>
+    <div class="btns"><button class="btn" id="botTest">Проверить бота</button></div>
+  </details>
+
+  <div class="card">
+    <div class="card__title">Доступ в панель</div>
+    <p class="card__hint">Хватит любого из двух способов, но лучше настроить оба: пароль работает с компьютера, Telegram ID — при открытии панели из бота.</p>
+    <div class="field"><label class="field__label" for="i_password">Пароль панели</label>
+      <input id="i_password" data-i="password" type="password" autocomplete="new-password">
+      <div class="field__hint">От 8 символов. Хэш посчитается сам, руками ничего вписывать не нужно.</div></div>
+    <div class="field"><label class="field__label" for="i_password2">Пароль ещё раз</label>
+      <input id="i_password2" data-i="password2" type="password" autocomplete="new-password"></div>
+    <div class="field"><label class="field__label" for="i_admin_ids">Telegram ID администраторов</label>
+      <input id="i_admin_ids" data-i="admin_ids" type="text" value="<?= $h(implode(', ', $c['admin_ids'])) ?>" placeholder="123456789, 987654321">
+      <div class="btns"><button class="btn btn--sm" id="myId">Подставить мой ID из Telegram</button></div></div>
+    <div class="field"><label class="field__label" for="i_origins">Откуда фронтенду разрешено дёргать API</label>
+      <input id="i_origins" data-i="origins" type="text" value="<?= $h(implode(', ', $c['allowed_origins'])) ?>">
+      <div class="field__hint">Через запятую. Обычно https://web.telegram.org и адрес вашего сайта.</div></div>
+  </div>
+
+  <div class="card">
+    <div id="instChecks"></div>
+    <div class="btns"><button class="btn btn--main" id="instSave"><?= $up ? 'Сохранить и обновить схему' : 'Установить' ?></button></div>
+    <div id="manual"></div>
+  </div>
+</div>
+<script>
+const CSRF = <?= json_encode($csrf) ?>;
+const MARKS = {ok:'✓', err:'✗', warn:'!', wait:'…'};
+function renderChecks(box, items) {
+  box.innerHTML = '';
+  for (const it of items) {
+    const d = document.createElement('div'); d.className = 'check check--' + it.status;
+    const m = document.createElement('div'); m.className = 'check__mark'; m.textContent = MARKS[it.status] || '·';
+    const n = document.createElement('div'); n.className = 'check__name'; n.textContent = it.name;
+    const b = document.createElement('div'); b.className = 'check__body';
+    const t = document.createElement('div'); t.className = 'check__detail'; t.textContent = it.detail || ''; b.appendChild(t);
+    if (it.hint) { const hh = document.createElement('div'); hh.className = 'check__hint'; hh.textContent = it.hint; b.appendChild(hh); }
+    d.append(m, n, b); box.appendChild(d);
+  }
+}
+const vals = () => Object.fromEntries([...document.querySelectorAll('[data-i]')].map(e => [e.dataset.i, e.value]));
+async function api(a, body) {
+  const r = await fetch('?a=' + a, {method:'POST', headers:{'Content-Type':'application/json','X-CSRF':CSRF}, body:JSON.stringify(body)});
+  return r.json();
+}
+document.getElementById('dbTest').onclick = async () => {
+  const box = document.getElementById('dbChecks');
+  renderChecks(box, [{name:'Подключение к базе', status:'wait', detail:'Проверяем…'}]);
+  const j = await api('inst_db', vals());
+  renderChecks(box, j.check ? [j.check] : [{name:'Подключение к базе', status:'err', detail:j.message || 'не вышло'}]);
+};
+document.getElementById('botTest').onclick = async () => {
+  const box = document.getElementById('botChecks');
+  renderChecks(box, [{name:'Telegram', status:'wait', detail:'Проверяем оба пути, до 20 секунд…'}]);
+  const j = await api('inst_bot', vals());
+  renderChecks(box, j.checks || [{name:'Telegram', status:'err', detail:j.message || 'не вышло'}]);
+};
+document.getElementById('myId').onclick = e => {
+  e.preventDefault();
+  const id = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  const f = document.getElementById('i_admin_ids');
+  if (!id) { f.placeholder = 'страница открыта не из Telegram — впишите ID вручную'; return; }
+  f.value = f.value ? f.value + ', ' + id : String(id);
+};
+document.getElementById('instSave').onclick = async () => {
+  const box = document.getElementById('instChecks');
+  renderChecks(box, [{name:'Установка', status:'wait', detail:'Пишем конфиг и создаём таблицы…'}]);
+  const j = await api('inst_save', vals());
+  if (!j.ok) {
+    renderChecks(box, [{name:'Установка', status:'err', detail:j.message || 'не вышло'}]);
+    if (j.manual) {
+      const m = document.getElementById('manual'); m.innerHTML = '';
+      const p = document.createElement('p'); p.className = 'card__hint';
+      p.textContent = 'Создайте файл api/config.php с таким содержимым и обновите страницу:';
+      const pre = document.createElement('pre'); pre.className = 'log__ctx'; pre.textContent = j.manual;
+      m.append(p, pre);
+    }
+    return;
+  }
+  renderChecks(box, j.checks || []);
+  const b = document.createElement('div'); b.className = 'btns';
+  const go = document.createElement('button'); go.className = 'btn btn--main'; go.textContent = 'Открыть панель';
+  go.onclick = () => location.href = 'admin.php';
+  b.appendChild(go); box.appendChild(b);
+};
+</script>
+</body></html>
+<?php exit; endif; ?>
+
 <?php if (!$me): ?>
 <div class="wrap" style="max-width:420px;padding-top:60px">
   <h1>Панель Years in pixels</h1>
@@ -513,9 +822,29 @@ document.getElementById('tgLogin').onclick = () => {
       </div>
     <?php endforeach; ?>
     <div class="card">
-      <p class="card__hint">Токен бота, доступы к базе, список администраторов и пароль панели лежат в config.php:
-        взлом базы не должен открывать вход в панель.</p>
+      <p class="card__hint">Настройки выше лежат в базе.</p>
       <div class="btns"><button class="btn btn--main" id="saveBtn">Сохранить</button></div>
+    </div>
+
+    <?php $c = config_current(); ?>
+    <div class="card">
+      <div class="card__title">Доступ</div>
+      <p class="card__hint">Это правит config.php, а не базу: токен бота, список админов и пароль панели
+        держатся отдельно, чтобы взлом базы не открывал вход сюда.</p>
+      <div class="field"><label class="field__label" for="ac_pw">Новый пароль панели</label>
+        <input id="ac_pw" data-ac="password" type="password" autocomplete="new-password" placeholder="<?= $c['admin_password_hash'] ? 'задан — пустое поле оставит прежний' : 'не задан' ?>">
+        <div class="field__hint">От 8 символов.</div></div>
+      <div class="field"><label class="field__label" for="ac_pw2">Ещё раз</label>
+        <input id="ac_pw2" data-ac="password2" type="password" autocomplete="new-password"></div>
+      <div class="field"><label class="field__label" for="ac_ids">Telegram ID администраторов</label>
+        <input id="ac_ids" data-ac="admin_ids" type="text" value="<?= $h(implode(', ', $c['admin_ids'])) ?>"></div>
+      <div class="field"><label class="field__label" for="ac_tok">Токен бота</label>
+        <input id="ac_tok" data-ac="bot_token" type="text" value="<?= $h($c['bot_token']) ?>">
+        <div class="field__hint">Меняется при отзыве токена в @BotFather. После смены проверьте каналы на вкладке «Диагностика».</div></div>
+      <div class="field"><label class="field__label" for="ac_org">Разрешённые источники запросов</label>
+        <input id="ac_org" data-ac="origins" type="text" value="<?= $h(implode(', ', $c['allowed_origins'])) ?>"></div>
+      <div id="acManual"></div>
+      <div class="btns"><button class="btn btn--main" id="acBtn">Сохранить доступ</button></div>
     </div>
   </section>
 
@@ -691,6 +1020,21 @@ document.getElementById('saveBtn').onclick = async () => {
   }
   const j = await api('save', {values});
   toast(j.message || (j.ok ? 'Сохранено' : 'Не сохранилось'), j.ok ? 'ok' : 'err');
+};
+
+// --- доступ: пароль, админы, токен
+document.getElementById('acBtn').onclick = async () => {
+  const body = Object.fromEntries([...document.querySelectorAll('[data-ac]')].map(e => [e.dataset.ac, e.value]));
+  const j = await api('access', body);
+  toast(j.message || (j.ok ? 'Сохранено' : 'Не сохранилось'), j.ok ? 'ok' : 'err');
+  const m = document.getElementById('acManual'); m.innerHTML = '';
+  if (j.manual) {
+    const p = document.createElement('p'); p.className = 'card__hint';
+    p.textContent = 'Файл не записался. Замените api/config.php этим содержимым:';
+    const pre = document.createElement('pre'); pre.className = 'log__ctx'; pre.textContent = j.manual;
+    m.append(p, pre);
+  }
+  if (j.ok) { document.getElementById('ac_pw').value = ''; document.getElementById('ac_pw2').value = ''; }
 };
 
 // --- журнал

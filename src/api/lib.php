@@ -4,7 +4,111 @@
  * Подключается из index.php, admin.php, setup.php, telegram.php.
  */
 
-require_once __DIR__ . '/config.php';
+// Конфига может ещё не быть: тогда точка входа отдаёт установщик, а не белый экран.
+if (is_file(__DIR__ . '/config.php')) require_once __DIR__ . '/config.php';
+
+// ------------------------------------------------------------- конфиг
+
+function config_path(): string { return __DIR__ . '/config.php'; }
+
+/** Установлено ли приложение: конфиг есть и в панель хоть кто-то может войти. */
+function app_installed(): bool
+{
+    return is_file(config_path())
+        && (!empty($GLOBALS['admin_password_hash']) || !empty($GLOBALS['admin_ids']));
+}
+
+/**
+ * 'upgrade' — конфиг с доступами уже есть, не хватает только входа в панель
+ *             (обновление работающего проекта: база и данные на месте).
+ * 'fresh'   — конфига нет, ставим с нуля.
+ */
+function install_mode(): string
+{
+    $c = config_current();
+    return is_file(config_path()) && $c['db_name'] !== '' && $c['db_user'] !== '' ? 'upgrade' : 'fresh';
+}
+
+/** Текущие значения конфига — для предзаполнения установщика и частичных правок. */
+function config_current(): array
+{
+    return [
+        'db_host'    => $GLOBALS['db_host'] ?? 'localhost',
+        'db_user'    => $GLOBALS['db_user'] ?? '',
+        'db_pass'    => $GLOBALS['db_pass'] ?? '',
+        'db_name'    => $GLOBALS['db_name'] ?? '',
+        'bot_token'  => $GLOBALS['bot_token'] ?? '',
+        'admin_ids'  => array_values(array_map('intval', (array)($GLOBALS['admin_ids'] ?? []))),
+        'admin_password_hash' => $GLOBALS['admin_password_hash'] ?? '',
+        'allowed_origins'     => array_values((array)($GLOBALS['allowed_origins'] ?? ['https://web.telegram.org'])),
+    ];
+}
+
+function config_render(array $v): string
+{
+    $q   = fn($s) => var_export((string)$s, true);
+    $ids = $v['admin_ids'] ? implode(",\n    ", array_map('intval', $v['admin_ids'])) . ',' : '// 123456789,';
+    $org = implode(",\n    ", array_map(fn($o) => var_export((string)$o, true), $v['allowed_origins'] ?: []));
+
+    return "<?php\n"
+        . "/**\n"
+        . " * Секреты и доступы. Файл в .gitignore и не должен попадать в репозиторий.\n"
+        . " * Записан установщиком панели; правится там же (api/admin.php).\n"
+        . " * Всё, что меняется на ходу — каналы связи, прокси, таймауты, вебхук, журнал — живёт в базе.\n"
+        . " */\n\n"
+        . "// --- База данных ---\n"
+        . '$db_host = ' . $q($v['db_host']) . ";\n"
+        . '$db_user = ' . $q($v['db_user']) . ";\n"
+        . '$db_pass = ' . $q($v['db_pass']) . ";\n"
+        . '$db_name = ' . $q($v['db_name']) . ";\n\n"
+        . "// --- Telegram ---\n"
+        . '$bot_token = ' . $q($v['bot_token']) . ";\n\n"
+        . "// --- Доступ в панель ---\n"
+        . "// Telegram ID тех, кто может открыть панель из бота.\n"
+        . "\$admin_ids = [\n    $ids\n];\n\n"
+        . "// Пароль панели, хэш. Пустая строка — вход по паролю выключен.\n"
+        . '$admin_password_hash = ' . $q($v['admin_password_hash']) . ";\n\n"
+        . "// --- Кому фронтенд разрешено дёргать API ---\n"
+        . "\$allowed_origins = [\n    $org,\n];\n";
+}
+
+/**
+ * Пишет конфиг и сразу применяет значения в текущем процессе.
+ * Если каталог закрыт на запись — возвращает готовый текст файла для ручного создания:
+ * это единственный запасной путь, который не оставляет пользователя в тупике.
+ *
+ * @return array{0:bool,1:string,2:string} [успех, сообщение, содержимое файла]
+ */
+function config_write(array $v): array
+{
+    $path = config_path();
+    $text = config_render($v);
+
+    $canWrite = is_file($path) ? is_writable($path) : is_writable(dirname($path));
+    if (!$canWrite) {
+        Log::error('admin', 'Конфиг не записать: нет прав', ['путь' => $path]);
+        return [false, 'Каталог закрыт на запись. Создайте config.php вручную — текст ниже.', $text];
+    }
+    // Резервная копия тоже .php: файл с расширением .bak веб-сервер отдал бы текстом вместе с паролями.
+    if (is_file($path)) @copy($path, dirname($path) . '/config-backup.php');
+    if (@file_put_contents($path, $text) === false) {
+        Log::error('admin', 'Конфиг не записался', ['путь' => $path]);
+        return [false, 'Запись не удалась. Создайте config.php вручную — текст ниже.', $text];
+    }
+    @chmod($path, 0640);
+
+    // Без этого следующий запрос ещё несколько секунд читает старый скомпилированный конфиг
+    // (opcache.revalidate_freq по умолчанию 2 с), то есть старый пароль продолжает пускать.
+    // При opcache.validate_timestamps=0 он не перечитал бы файл вообще — проверка есть в панели.
+    if (function_exists('opcache_invalidate')) @opcache_invalidate($path, true);
+    clearstatcache(true, $path);
+
+    foreach (['db_host', 'db_user', 'db_pass', 'db_name', 'bot_token', 'admin_ids', 'admin_password_hash', 'allowed_origins'] as $k) {
+        $GLOBALS[$k] = $v[$k];
+    }
+    Log::info('admin', 'Конфиг записан', ['админов' => count($v['admin_ids']), 'пароль' => $v['admin_password_hash'] ? 'задан' : 'пуст']);
+    return [true, 'Настройки доступа сохранены', $text];
+}
 
 // ---------------------------------------------------------------- база
 

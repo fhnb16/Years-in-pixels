@@ -49,7 +49,7 @@ function tg_channel_ready(string $channel): array
  *
  * @return array{ok:bool,channel:string,data:?array,reason:string,message:string,ms:int,http:int}
  */
-function tg_attempt(string $channel, string $method, array $params = [], ?string $token = null): array
+function tg_attempt(string $channel, string $method, array $params = [], ?string $token = null, ?string $baseOverride = null): array
 {
     $t0    = microtime(true);
     $token = $token ?: ($GLOBALS['bot_token'] ?? '');
@@ -63,12 +63,16 @@ function tg_attempt(string $channel, string $method, array $params = [], ?string
 
     if ($token === '') return $fail('no_token', 'Токен бота не задан в config.php');
 
-    [$ready, $why] = tg_channel_ready($channel);
-    if (!$ready) return $fail('not_configured', $why);
+    // baseOverride передаёт установщик: настроек в базе ещё нет, а проверить связь надо уже сейчас.
+    if ($baseOverride === null) {
+        [$ready, $why] = tg_channel_ready($channel);
+        if (!$ready) return $fail('not_configured', $why);
+    }
 
-    $base = $channel === 'worker'
-        ? rtrim((string)Settings::get('tg_worker_base', ''), '/')
-        : rtrim((string)Settings::get('tg_api_base', 'https://api.telegram.org'), '/');
+    $base = rtrim((string)($baseOverride ?? ($channel === 'worker'
+        ? Settings::get('tg_worker_base', '')
+        : Settings::get('tg_api_base', 'https://api.telegram.org'))), '/');
+    if ($base === '') return $fail('not_configured', 'Пустой адрес Bot API');
 
     $ch = curl_init();
     curl_setopt_array($ch, [
