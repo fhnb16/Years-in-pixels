@@ -1,29 +1,31 @@
-<?
+<?php
+/**
+ * Секреты и доступы. Файл в .gitignore и не должен попадать в репозиторий.
+ * Всё, что можно менять на ходу (каналы связи, прокси, таймауты, вебхук, журнал),
+ * живёт в базе и правится в панели: api/admin.php
+ */
 
-// --- Настройки CORS (Cross-Origin Resource Sharing) ---
-// Важно для локальной разработки или если фронтенд на другом домене/порту
-header("Access-Control-Allow-Origin: *"); // В продакшене замените * на ваш домен фронтенда
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
+// --- База данных ---
+$db_host = 'localhost';
+$db_user = 'имя_пользователя';
+$db_pass = 'пароль';
+$db_name = 'имя_базы';
 
-// --- Конфигурация Базы Данных ---
-$db_host = 'localhost';     // Или ваш хост БД
-$db_user = 'your_db_user';  // Ваше имя пользователя БД
-$db_pass = 'your_db_password'; // Ваш пароль БД
-$db_name = 'your_db_name';    // Имя вашей БД
+// --- Telegram ---
+$bot_token = '000000000:AA...';
 
-$bot_token = "";
+// --- Доступ в панель ---
+// Telegram ID тех, кто может открыть панель из бота.
+$admin_ids = [
+    // 123456789,
+];
 
-    $connectTimeout = 6; // 5-7 секунд, как просил
-    $totalTimeout = 15;
-    $dohUrl = 'https://cloudflare-dns.com/dns-query'; // или https://dns.google/dns-query
-    
-    // Прокси-настройки (вынеси в конфиг!)
-    $proxyConfig = [
-        'host' => '127.0.0.1',
-        'port' => 1080,
-        'user' => 'your_proxy_user',
-        'pass' => 'your_proxy_pass',
-    ];
+// Пароль для входа с компьютера. Пустая строка — вход по паролю выключен.
+// Хэш получить так:  php -r "echo password_hash('ваш пароль', PASSWORD_DEFAULT), PHP_EOL;"
+$admin_password_hash = '';
 
-?>
+// --- Кому фронтенд разрешено дёргать API ---
+$allowed_origins = [
+    'https://web.telegram.org',
+    'https://bot.example.ru',
+];

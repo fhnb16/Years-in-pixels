@@ -1,92 +1,33 @@
-<?
+<?php
 
-include_once("config.php");
+require_once __DIR__ . '/lib.php';
 
-// Обработка preflight запроса OPTIONS
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+// --- CORS: отвечаем только тем источникам, что перечислены в config.php ---
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin !== '' && in_array($origin, $allowed_origins ?? [], true)) {
+    header("Access-Control-Allow-Origin: $origin");
+    header('Vary: Origin');
+}
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
 // --- Подключение к Базе Данных (PDO) ---
 try {
-    $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    http_response_code(500); // Internal Server Error
-    echo json_encode(['success' => false, 'message' => 'Ошибка подключения к базе данных: ' . $e->getMessage()]);
+    $pdo = db();
+} catch (Throwable $e) {
+    http_response_code(500);
+    // Наружу — без подробностей, они уже в журнале: текст ошибки PDO выдаёт имя базы и пользователя.
+    echo json_encode(['success' => false, 'message' => 'База данных временно недоступна']);
     exit;
 }
 
 // --- Функции API ---
 
-/**
- * Проверяет hash, полученный от Telegram Web App.
- * 
- * @param string $initData Строка initData, полученная от Telegram.
- * @param string $botToken Токен вашего бота.
- * @return bool Возвращает true, если hash валиден, иначе false.
- */
-function checkHash(string $initData, string $botToken): bool
-{
-    [$checksum, $sortedInitData] = convertInitData($initData);
-    $secretKey                   = hash_hmac('sha256', $botToken, 'WebAppData', true);
-    $hash                        = bin2hex(hash_hmac('sha256', $sortedInitData, $secretKey, true));
-    
-    if(0 !== strcmp($hash, $checksum)){
-        error_log("Init Data: " . $initData);
-        error_log("Data Check String: " . $sortedInitData);
-        error_log("Secret Key (bin2hex): " . bin2hex($secretKey));
-        error_log("Calculated Hash: " . $hash);
-        error_log("Received Hash: " . $checksum);
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * convert init data to `key=value` and sort it `alphabetically`.
- *
- * @param string $initData init data from Telegram (`Telegram.WebApp.initData`)
- *
- * @return string[] return hash and sorted init data
- */
-function convertInitData(string $initData): array
-{
-    $initDataArray = explode('&', rawurldecode($initData));
-    $needle        = 'hash=';
-    $hash          = '';
-
-    foreach ($initDataArray as &$data) {
-        if (substr($data, 0, \strlen($needle)) === $needle) {
-            $hash = substr_replace($data, '', 0, \strlen($needle));
-            $data = null;
-        }
-    }
-    $initDataArray = array_filter($initDataArray);
-    sort($initDataArray);
-
-    return [$hash, implode("\n", $initDataArray)];
-}
-
-/**
- * Парсит initData и возвращает массив данных пользователя
- */
-function parseInitData(string $initData): array
-{
-    $params = [];
-    $pairs = explode('&', rawurldecode($initData));
-    
-    foreach ($pairs as $pair) {
-        $parts = explode('=', $pair, 2);
-        if (count($parts) == 2) {
-            $params[$parts[0]] = $parts[1];
-        }
-    }
-    
-    return $params;
-}
+// Проверка подписи Telegram (checkHash / convertInitData / parseInitData) живёт в lib.php.
 
 /**
  * Обрабатывает и сохраняет изображение пользователя
@@ -226,7 +167,7 @@ function sendImageToUser($pdo, $botToken, $input, $caption = null) {
 
     try {
         // Подключаем Telegram API
-        include_once("telegram.php");
+        require_once __DIR__ . '/telegram.php';
         
         $telegram = new TelegramBot($botToken);
         $result = $telegram->sendPhoto($userId, $imageUrl, $caption);
@@ -250,7 +191,7 @@ function sendImageToUser($pdo, $botToken, $input, $caption = null) {
         ];
 
     } catch (Exception $e) {
-        error_log("Ошибка отправки изображения пользователю {$userId}: " . $e->getMessage());
+        Log::warn('tg', (string)("Ошибка отправки изображения пользователю {$userId}: " . $e->getMessage()));
         throw $e;
     }
 }
@@ -388,7 +329,7 @@ function updateUserGeolocation($pdo, $userId) {
         }
         
     } catch (Exception $e) {
-        error_log("Geolocation error for user {$userId}: " . $e->getMessage());
+        Log::warn('api', (string)("Geolocation error for user {$userId}: " . $e->getMessage()));
         // Не прерываем основной процесс из-за ошибки геолокации
         // Пытаемся обновить хотя бы IP
         try {
@@ -398,7 +339,7 @@ function updateUserGeolocation($pdo, $userId) {
                 $updateIpStmt->execute(['user_id' => $userId, 'ip' => $ip]);
             }
         } catch (Exception $e2) {
-            error_log("IP update error for user {$userId}: " . $e2->getMessage());
+            Log::warn('api', (string)("IP update error for user {$userId}: " . $e2->getMessage()));
         }
     }
 }
@@ -519,7 +460,7 @@ function getCalendarData($pdo, $botToken) {
         upsertUser($pdo, $initData, $botToken);
     } catch (Exception $e) {
         http_response_code(403);
-        error_log("ERROR: User upsert failed. " . $e->getMessage());
+        Log::warn('auth', (string)("ERROR: User upsert failed. " . $e->getMessage()));
         echo json_encode(['success' => false, 'message' => 'Ошибка обработки данных пользователя: ' . $e->getMessage()]);
         exit;
     }
@@ -600,7 +541,7 @@ function saveCalendarEntry($pdo, $botToken, $input) {
         upsertUser($pdo, $initData, $botToken);
     } catch (Exception $e) {
         http_response_code(403);
-        error_log("ERROR: User upsert failed. " . $e->getMessage());
+        Log::warn('auth', (string)("ERROR: User upsert failed. " . $e->getMessage()));
         echo json_encode(['success' => false, 'message' => 'Ошибка обработки данных пользователя: ' . $e->getMessage()]);
         exit;
     }
@@ -682,7 +623,7 @@ function hideCalendarEntry($pdo, $botToken, $input) {
         upsertUser($pdo, $initData, $botToken);
     } catch (Exception $e) {
         // Можно не прерывать выполнение, если upsert не критичен для удаления, но логировать стоит
-        error_log("INFO (hideEntry): User upsert failed (not critical). " . $e->getMessage());
+        Log::warn('auth', (string)("INFO (hideEntry): User upsert failed (not critical). " . $e->getMessage()));
         // Если строго, можно прервать:
         // http_response_code(403);
         // echo json_encode(['success' => false, 'message' => 'Ошибка обработки данных пользователя: ' . $e->getMessage()]);
@@ -751,13 +692,13 @@ switch ($method) {
             $result = saveUserImage($pdo, $bot_token, $input);
             if ($result['success'] && isset($result['url'])) {
                 try {
-                    include_once("telegram.php");
+                    require_once __DIR__ . '/telegram.php';
                     $telegram = new TelegramBot($bot_token);
                     $sendResult = $telegram->sendPhoto($input['user_id'], new CURLFile(dirname(__FILE__) . str_replace('https://bot.fhnb.ru/pixels/api/', '/', $result['url'])), "Ваше изображение календаря готово!", array('parse_mode' => 'HTML'));
                     //$sendResult = $telegram->sendPhotoUrl($input['user_id'], $result['url'], "Ваше изображение календаря готово!", array('parse_mode' => 'HTML'));
                     $result['telegram_sent'] = ['success' => true, 'result' => $sendResult];
                 } catch (Exception $e) {
-                    error_log("Ошибка отправки изображения: " . $e->getMessage());
+                    Log::warn('tg', (string)("Ошибка отправки изображения: " . $e->getMessage()));
                     $sendResult = $telegram->sendMessage($input['user_id'], "Ваше изображение календаря <a href='" . $result['url'] . "'>готово</a>!", array('parse_mode' => 'HTML'));
                     $result['telegram_sent'] = ['success' => false, 'error' => $e->getMessage()];
                 }

@@ -2,64 +2,48 @@
 
 Рабочий пример: https://t.me/PixelYearsBot/Diary
 
----
+Календарь настроений как Telegram Web App: статический фронтенд, PHP-API, MySQL.
 
-Залей на хостинг, создай таблицы бд:
- 
-```sql
-CREATE TABLE `calendar_entries` (
-	`id` INT(11) NOT NULL AUTO_INCREMENT,
-	`user_id` BIGINT(20) NOT NULL,
-	`entry_date` DATE NOT NULL,
-	`mood_key` VARCHAR(25) NOT NULL COLLATE 'utf8mb4_unicode_ci',
-	`description` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`created_at` TIMESTAMP NULL DEFAULT current_timestamp(),
-	`updated_at` TIMESTAMP NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-	`alcohol` TINYINT(1) NULL DEFAULT '0',
-	`sport` TINYINT(1) NULL DEFAULT '0',
-	`sex` TINYINT(1) NULL DEFAULT '0',
-	`friends` TINYINT(1) NULL DEFAULT '0',
-	`romantic` TINYINT(1) NULL DEFAULT '0',
-	`crying` TINYINT(1) NULL DEFAULT '0',
-	`WomanDay` TINYINT(1) NULL DEFAULT '0',
-	PRIMARY KEY (`id`) USING BTREE,
-	UNIQUE INDEX `user_day_unique` (`user_id`, `entry_date`) USING BTREE,
-	INDEX `idx_user_year` (`user_id`, `entry_date`) USING BTREE,
-	CONSTRAINT `fk_user_id` FOREIGN KEY (`user_id`) REFERENCES `calendar_users` (`user_id`) ON UPDATE RESTRICT ON DELETE RESTRICT
-)
-COLLATE='utf8mb4_unicode_ci'
-ENGINE=InnoDB
-AUTO_INCREMENT=482
-;
-```
- 
-```sql
-CREATE TABLE `calendar_users` (
-	`id` INT(11) NOT NULL AUTO_INCREMENT,
-	`user_id` BIGINT(20) NULL DEFAULT NULL,
-	`user_firstname` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_lastname` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_nickname` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_allowmessages` TINYINT(1) NOT NULL DEFAULT '1',
-	`user_metainfo` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_timezone` VARCHAR(50) NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_lastmessage` DATE NULL DEFAULT NULL,
-	`user_lastentry` DATE NULL DEFAULT NULL,
-	`user_entriestotal` INT(11) NOT NULL DEFAULT '0',
-	`user_latestip` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_menu` TEXT NOT NULL DEFAULT '0' COLLATE 'utf8mb4_unicode_ci',
-	`user_private` TINYINT(1) NOT NULL DEFAULT '1',
-	`user_sharehash` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_shareimage` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_unicode_ci',
-	`user_registerdate` TIMESTAMP NULL DEFAULT current_timestamp(),
-	PRIMARY KEY (`id`) USING BTREE,
-	UNIQUE INDEX `user_id` (`user_id`) USING BTREE
-)
-COLLATE='utf8mb4_unicode_ci'
-ENGINE=InnoDB
-AUTO_INCREMENT=299
-;
-```
+## Установка
+
+1. Залейте `src/` на хостинг.
+2. Скопируйте `src/api/config - example.php` в `src/api/config.php` и заполните: доступы к базе,
+   токен бота, свой Telegram ID в `$admin_ids`, хэш пароля панели.
+
+   ```
+   php -r "echo password_hash('ваш пароль', PASSWORD_DEFAULT), PHP_EOL;"
+   ```
+
+3. Откройте `api/admin.php`, войдите и нажмите **Обновить схему**. Установщик создаст таблицы
+   и недостающие столбцы, а старые значения прокси и таймаутов из `config.php` перенесёт в настройки.
+   Руками SQL выполнять не нужно — за схему отвечает `api/setup.php`.
+
+## Панель
+
+`api/admin.php` — настройки, диагностика, журнал, календари пользователей.
+
+- **Диагностика.** Кнопка у каждого канала до Bot API вызывает `getMe` ровно тем способом,
+  которым ходит бот: напрямую, через реле Cloudflare, через основной и запасной SOCKS5.
+  Отказ показывается с разобранной причиной и подсказкой. Там же `setWebhook`/`getWebhookInfo`,
+  проверка своего эндпоинта за реле, права на каталоги, версия PHP и состояние схемы.
+- **Настройки.** Порядок и состав каналов, адреса реле и прокси, таймауты, DoH, вебхук, журнал.
+  Хранятся в таблице `app_settings`. Секреты уровня «доступ ко всему» — токен бота, доступы к базе,
+  список админов, пароль панели — остаются в `config.php`: взлом базы не должен открывать вход в панель.
+- **Журнал.** `api/logs/ГГГГ-ММ-ДД.jsonl`, фильтры по уровню, категории и подстроке.
+  Категории: `tg`, `webhook`, `api`, `auth`, `db`, `admin`. Секреты вырезаются при записи.
+- **Пользователи.** Поиск и просмотр календаря любого пользователя, только чтение.
+
+Вход в панель — из Telegram (аккаунт должен быть в `$admin_ids`) или паролем с компьютера.
+
+## Каналы связи с Telegram
+
+Запросы к Bot API идут по цепочке включённых каналов сверху вниз, до первого сработавшего.
+Отказ самого Telegram (неверный `chat_id`, бот заблокирован) цепочку не продолжает — другой канал
+тут не поможет. Каждая неудачная попытка попадает в журнал с причиной.
+
+Каталог `api/logs/` не должен отдаваться браузером. `.htaccess` в `api/` это закрывает,
+но **на nginx `.htaccess` не действует** — нужно правило в конфиге сервера. Проверка
+«Журнал закрыт снаружи» в панели показывает, как обстоит дело на самом деле.
 
 ---
   [![fhnb16](https://img.shields.io/badge/Made_by_fhnb16-april_2025-gray.svg?style=plastic&labelColor=FF0000)](https://fhnb.ru/)
