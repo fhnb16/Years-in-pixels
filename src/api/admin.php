@@ -146,7 +146,7 @@ function installer_action(string $a, array $in): array
             // Сразу впускаем того, кто ставил: второй раз пароль вводить незачем.
             if (session_status() === PHP_SESSION_ACTIVE) {
                 session_regenerate_id(true);
-                $_SESSION['admin'] = ['via' => 'установщик', 'uid' => $ids[0] ?? null, 'name' => 'установщик', 'since' => time()];
+                $_SESSION['admin'] = ['via' => 'после установки', 'uid' => $ids[0] ?? null, 'name' => 'администратор', 'since' => time()];
             }
             Log::info('admin', 'Установка завершена', ['админов' => count($ids), 'пароль' => $pw !== '' ? 'задан' : 'не задан', 'реле' => $relay !== '']);
 
@@ -958,7 +958,8 @@ document.getElementById('tgLogin').onclick = () => {
           <option value="auth">auth</option><option value="db">db</option><option value="admin">admin</option>
         </select>
         <input type="search" id="logQ" placeholder="подстрока" style="width:auto;flex:1;min-width:120px">
-        <button class="btn" id="logBtn">Показать</button>
+        <button class="btn btn--main" id="logBtn">Обновить</button>
+        <span class="pill" id="logInfo"></span>
       </div>
     </div>
     <div class="card"><div class="log" id="logOut"></div></div>
@@ -1028,12 +1029,21 @@ async function api(a, body) {
   return r.json();
 }
 
-// --- вкладки
+// --- вкладки: активная видна в адресной строке, ?tab=logs открывает журнал сразу
+const TABS = [...document.querySelectorAll('[data-tab]')].map(b => b.dataset.tab);
+function showTab(name) {
+  if (!TABS.includes(name)) name = TABS[0];
+  document.querySelectorAll('.nav__tab').forEach(t => t.classList.toggle('nav__tab--on', t.dataset.tab === name));
+  document.querySelectorAll('section[id^=tab-]').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + name));
+  const u = new URL(location);
+  u.searchParams.set('tab', name);
+  history.replaceState(null, '', u);   // replace, а не push: Назад должен уводить со страницы, а не листать вкладки
+}
 document.getElementById('tabs').addEventListener('click', e => {
-  const b = e.target.closest('[data-tab]'); if (!b) return;
-  document.querySelectorAll('.nav__tab').forEach(t => t.classList.toggle('nav__tab--on', t === b));
-  document.querySelectorAll('section[id^=tab-]').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + b.dataset.tab));
+  const b = e.target.closest('[data-tab]');
+  if (b) showTab(b.dataset.tab);
 });
+showTab(new URLSearchParams(location.search).get('tab'));
 
 // --- проверки каналов
 const chBox = document.getElementById('chChecks');
@@ -1161,6 +1171,9 @@ async function loadLogs() {
   }
   const out = document.getElementById('logOut');
   out.innerHTML = '';
+  // Кнопка без видимого следа заставляет жать её второй раз: пишем, сколько и когда.
+  document.getElementById('logInfo').textContent =
+    `${(j.records || []).length} записей · ${new Date().toLocaleTimeString('ru-RU')}`;
   if (!j.records || !j.records.length) { out.textContent = 'Записей нет'; return; }
   for (const r of j.records) {
     const t = document.createElement('div'); t.className = 'log__t'; t.textContent = (r.t || '').slice(11, 19);
