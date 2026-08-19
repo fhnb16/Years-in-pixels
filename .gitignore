@@ -3,3 +3,5 @@ src/metrics.html
 src/api/test.php
 src/api/logs/
 src/api/uploads/
+src/api/config-backup.php
+src/api/config.php.bk
