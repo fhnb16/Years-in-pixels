@@ -493,7 +493,7 @@ function admin_login_password(string $password): array
         return [false, 'Пароль не подошёл'];
     }
     session_regenerate_id(true);
-    $_SESSION['admin'] = ['via' => 'по паролю', 'uid' => null, 'name' => 'администратор', 'since' => time()];
+    $_SESSION['admin'] = ['via' => 'пароль', 'uid' => null, 'name' => 'по паролю', 'since' => time()];
     Log::info('admin', 'Вход в панель по паролю', ['ip' => $_SERVER['REMOTE_ADDR'] ?? '?']);
     return [true, ''];
 }
@@ -524,7 +524,7 @@ function admin_login_initdata(string $initData): array
 
     session_regenerate_id(true);
     $_SESSION['admin'] = [
-        'via'   => 'из Telegram',
+        'via'   => 'Telegram',
         'uid'   => $uid,
         'name'  => trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: ('id ' . $uid),
         'since' => time(),
