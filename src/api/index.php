@@ -2,7 +2,7 @@
 
 require_once __DIR__ . '/lib.php';
 
-// --- CORS: отвечаем только тем источникам, что перечислены в config.php ---
+// --- CORS: отвечаем только тем источникам, что перечислены в config.php. ---
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin !== '' && in_array($origin, $allowed_origins ?? [], true)) {
     header("Access-Control-Allow-Origin: $origin");

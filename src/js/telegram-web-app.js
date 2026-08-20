@@ -34,7 +34,7 @@
         }
         if (dataParsed.eventType == 'set_custom_style') {
           if (event.origin === 'https://web.telegram.org') {
-            iFrameStyle.innerHTML = dataParsed.eventData;
+            iFrameStyle.innerHTML = parseHTML(dataParsed.eventData);
           }
         } else if (dataParsed.eventType == 'reload_iframe') {
           try {
@@ -215,18 +215,18 @@
       window.addEventListener('pagehide', enableHidden, false);
       window.addEventListener('blur', enableHidden, false);
       if (iframeEl !== null) {
-        iframeEl.src = url;
+        iframeEl.src = parseURL(url);
       }
       setTimeout(function() {
         if (!pageHidden) {
-          window.location = url;
+          window.location = parseURL(url);
         }
         window.removeEventListener('pagehide', enableHidden, false);
         window.removeEventListener('blur', enableHidden, false);
       }, 2000);
     }
     else {
-      window.location = url;
+      window.location = parseURL(url);
     }
     return true;
   }
@@ -413,7 +413,7 @@
     if (el.tagName == 'A' &&
         el.target != '_blank' &&
         (el.protocol == 'http:' || el.protocol == 'https:') &&
-        el.hostname == 't.me') {
+        isTmeHostname(el.hostname)) {
       WebApp.openTelegramLink(el.href);
       e.preventDefault();
     }
@@ -421,6 +421,11 @@
 
   function strTrim(str) {
     return str.toString().replace(/^\s+|\s+$/g, '');
+  }
+
+  function isTmeHostname(hostname) {
+    hostname = hostname.toString().toLowerCase();
+    return hostname == 't.me' || hostname == 'telegram.me';
   }
 
   function receiveWebViewEvent(eventType) {
@@ -666,6 +671,30 @@
         requestData.callback(false);
       }
       receiveWebViewEvent('shareMessageFailed', {
+        error: eventData.error
+      });
+    }
+  }
+
+  var WebAppRequestChatOpened = false;
+  function onRequestedChatSent(eventType, eventData) {
+    if (WebAppRequestChatOpened) {
+      var requestData = WebAppRequestChatOpened;
+      WebAppRequestChatOpened = false;
+      if (requestData.callback) {
+        requestData.callback(true);
+      }
+      receiveWebViewEvent('requestedChatSent');
+    }
+  }
+  function onRequestedChatFailed(eventType, eventData) {
+    if (WebAppRequestChatOpened) {
+      var requestData = WebAppRequestChatOpened;
+      WebAppRequestChatOpened = false;
+      if (requestData.callback) {
+        requestData.callback(false);
+      }
+      receiveWebViewEvent('requestedChatFailed', {
         error: eventData.error
       });
     }
@@ -1058,7 +1087,7 @@
       debugBottomBar.style.display = 'none';
       bottomBarHeight = 0;
     }
-    debugBottomBar.style.background = getBottomBarColor();
+    debugBottomBar.style.background = parseURL(getBottomBarColor());
     if (document.documentElement) {
       document.documentElement.style.boxSizing = 'border-box';
       document.documentElement.style.paddingBottom = bottomBarHeight + 'px';
@@ -2889,7 +2918,7 @@
   };
   WebApp.openLink = function (url, options) {
     var a = document.createElement('A');
-    a.href = url;
+    a.href = parseURL(url);
     if (a.protocol != 'http:' &&
         a.protocol != 'https:') {
       console.error('[Telegram.WebApp] Url protocol is not supported', url);
@@ -2912,13 +2941,13 @@
   };
   WebApp.openTelegramLink = function (url, options) {
     var a = document.createElement('A');
-    a.href = url;
+    a.href = parseURL(url);
     if (a.protocol != 'http:' &&
         a.protocol != 'https:') {
       console.error('[Telegram.WebApp] Url protocol is not supported', url);
       throw Error('WebAppTgUrlInvalid');
     }
-    if (a.hostname != 't.me') {
+    if (!isTmeHostname(a.hostname)) {
       console.error('[Telegram.WebApp] Url host is not supported', url);
       throw Error('WebAppTgUrlInvalid');
     }
@@ -2936,10 +2965,10 @@
   };
   WebApp.openInvoice = function (url, callback) {
     var a = document.createElement('A'), match, slug;
-    a.href = url;
+    a.href = parseURL(url);
     if (a.protocol != 'http:' &&
         a.protocol != 'https:' ||
-        a.hostname != 't.me' ||
+        !isTmeHostname(a.hostname) ||
         !(match = a.pathname.match(/^\/(\$|invoice\/)([A-Za-z0-9\-_=]+)$/)) ||
         !(slug = match[2])) {
       console.error('[Telegram.WebApp] Invoice url is invalid', url);
@@ -3168,7 +3197,7 @@
       console.error('[Telegram.WebApp] Url is required');
       throw Error('WebAppDownloadFileParamInvalid');
     }
-    a.href = params.url;
+    a.href = parseURL(params.url);
     if (a.protocol != 'https:') {
       console.error('[Telegram.WebApp] Url protocol is not supported', url);
       throw Error('WebAppDownloadFileParamInvalid');
@@ -3193,7 +3222,7 @@
       throw Error('WebAppMethodUnsupported');
     }
     var a = document.createElement('A');
-    a.href = media_url;
+    a.href = parseURL(media_url);
     if (a.protocol != 'http:' &&
         a.protocol != 'https:') {
       console.error('[Telegram.WebApp] Media url protocol is not supported', url);
@@ -3213,7 +3242,7 @@
     }
     if (typeof params.widget_link !== 'undefined') {
       params.widget_link = params.widget_link || {};
-      a.href = params.widget_link.url;
+      a.href = parseURL(params.widget_link.url);
       if (a.protocol != 'http:' &&
           a.protocol != 'https:') {
         console.error('[Telegram.WebApp] Link protocol is not supported', url);
@@ -3250,6 +3279,20 @@
       callback: callback
     };
     WebView.postEvent('web_app_send_prepared_message', false, {id: msg_id});
+  };
+  WebApp.requestChat = function (req_id, callback) {
+    if (!versionAtLeast('9.6')) {
+      console.error('[Telegram.WebApp] Method requestChat is not supported in version ' + webAppVersion);
+      throw Error('WebAppMethodUnsupported');
+    }
+    if (WebAppRequestChatOpened) {
+      console.error('[Telegram.WebApp] Request chat is already opened');
+      throw Error('WebAppRequestChatOpened');
+    }
+    WebAppRequestChatOpened = {
+      callback: callback
+    };
+    WebView.postEvent('web_app_request_chat', false, {req_id: req_id});
   };
   WebApp.setEmojiStatus = function (custom_emoji_id, params, callback) {
     params = params || {};
@@ -3341,6 +3384,8 @@
   WebView.onEvent('home_screen_checked', onHomeScreenChecked);
   WebView.onEvent('prepared_message_sent', onPreparedMessageSent);
   WebView.onEvent('prepared_message_failed', onPreparedMessageFailed);
+  WebView.onEvent('requested_chat_sent', onRequestedChatSent);
+  WebView.onEvent('requested_chat_failed', onRequestedChatFailed);
   WebView.onEvent('emoji_status_set', onEmojiStatusSet);
   WebView.onEvent('emoji_status_failed', onEmojiStatusFailed);
   WebView.onEvent('emoji_status_access_requested', onEmojiStatusAccessRequested);
